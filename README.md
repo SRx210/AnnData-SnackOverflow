@@ -7,7 +7,7 @@ AnnData is an AI-powered platform that empowers farmers with real-time crop dema
 - [Sohan Raut](https://github.com/SRx210)
 - [Shivam Shirodkar](https://github.com/Shivamshirodkarrr)
 - [Vivek Naik](https://github.com/VivekNaik0309)
-- [Modinasab Y. Pinjar]((https://github.com/ModinasabPinjar))
+- [Modinasab Y. Pinjar](https://github.com/ModinasabPinjar)
 - [Nikesh Thorat](https://github.com/Nikeshthorat)
 
 ## Tech Stack (TBD)
