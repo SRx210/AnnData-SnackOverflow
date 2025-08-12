@@ -8,7 +8,7 @@ Our goal is to modernize Indian farming using data and technology, creating a su
 
 ## Live API & Documentation
 - **Base URL:** https://ann-data-api.onrender.com 
-- **Swagger UI (API Docs):** https://ann-data-api.onrender.com-api-docs 
+- **Swagger UI (API Docs):** https://ann-data-api.onrender.com/api-docs 
 
 ---
 
@@ -57,7 +57,7 @@ TBD
 ## Testing the API
 
 * **Swagger UI (Local):** [http://localhost:3000/api-docs](http://localhost:3000/api-docs)
-* **Swagger UI (Live):** https\://<your-service>.onrender.com/api-docs
+* **Swagger UI (Live):** https://ann-data-api.onrender.com/api-docs
 * **Health Check:**
 
   ```
