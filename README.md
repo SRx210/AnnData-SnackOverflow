@@ -7,7 +7,6 @@ Our goal is to modernize Indian farming using data and technology, creating a su
 ---
 
 ## Live API & Documentation
-- **Base URL:** https://ann-data-api.onrender.com 
 - **Swagger UI (API Docs):** https://ann-data-api.onrender.com/api-docs 
 
 ---
