@@ -8,8 +8,10 @@ const swaggerJsdoc = require('swagger-jsdoc');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = 'your-secret-key-here';
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-please-change';
 
+
+servers:
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -43,8 +45,8 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: `http://localhost:${PORT}`,
-        description: 'Development server',
+        url: process.env.BASE_URL || `http://localhost:${PORT}`,
+        description: 'API server',
       },
     ],
     components: {
