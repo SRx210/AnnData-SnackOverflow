@@ -96,11 +96,3 @@ Response: { "status": "OK", "message": "AnnData API is running" }
 * Live: [https://ann-data-api.onrender.com/api-docs](https://ann-data-api.onrender.com/api-docs)
 
 ---
-
-## 📅 Future Plans
-
-* 🚜 Deploy frontend UI for farmers
-* 🤖 Integrate AI/ML crop rotation model
-* 🛒 Add marketplace module for agri suppliers
-
----
