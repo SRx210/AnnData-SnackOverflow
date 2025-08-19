@@ -1,17 +1,23 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
 const swaggerUi = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
 
+// Database connection
+const connectDB = require('./config/database');
+
+// Models
+const User = require('./models/User');
+const Feedback = require('./models/Feedback');
+const Prediction = require('./models/Prediction');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-please-change';
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-here';
 
-
-servers:
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -29,10 +35,10 @@ const upload = multer({
   }
 });
 
-// In-memory data storage
-let users = [];
-let feedback = [];
-let userCounter = 1;
+// In-memory data storage (removed - using MongoDB now)
+// let users = [];
+// let feedback = [];
+// let userCounter = 1;
 
 // Swagger configuration
 const swaggerOptions = {
@@ -45,8 +51,8 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: process.env.BASE_URL || `http://localhost:${PORT}`,
-        description: 'API server',
+        url: `http://localhost:${PORT}`,
+        description: 'Development server',
       },
     ],
     components: {
@@ -161,27 +167,44 @@ app.post('/api/auth/register', async (req, res) => {
   try {
     const { username, email, password } = req.body;
 
+    // Validation
+    if (!username || !email || !password) {
+      return res.status(400).json({ error: 'Username, email, and password are required' });
+    }
+
     // Check if user already exists
-    const existingUser = users.find(user => user.email === email);
+    const existingUser = await User.findByEmail(email);
     if (existingUser) {
       return res.status(400).json({ error: 'Email already exists' });
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Create new user (password hashing handled in model pre-save hook)
+    const newUser = new User({
+      username: username.trim(),
+      email: email.toLowerCase().trim(),
+      password
+    });
 
-    // Create new user
-    const newUser = {
-      id: userCounter++,
-      username,
-      email,
-      password: hashedPassword
-    };
+    await newUser.save();
 
-    users.push(newUser);
-
-    res.status(201).json({ message: 'User registered successfully' });
+    res.status(201).json({ 
+      message: 'User registered successfully',
+      userId: newUser._id
+    });
   } catch (error) {
+    console.error('Registration error:', error);
+    
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({ error: errors.join(', ') });
+    }
+    
+    // Handle duplicate key error
+    if (error.code === 11000) {
+      return res.status(400).json({ error: 'Email already exists' });
+    }
+    
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -222,21 +245,35 @@ app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    // Validation
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
     // Find user
-    const user = users.find(u => u.email === email);
+    const user = await User.findByEmail(email);
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Check password
-    const isValidPassword = await bcrypt.compare(password, user.password);
+    // Check if user is active
+    if (!user.isActive) {
+      return res.status(401).json({ error: 'Account is deactivated' });
+    }
+
+    // Check password using model method
+    const isValidPassword = await user.comparePassword(password);
     if (!isValidPassword) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     // Generate JWT token
     const token = jwt.sign(
-      { id: user.id, username: user.username, email: user.email },
+      { 
+        id: user._id.toString(), 
+        username: user.username, 
+        email: user.email 
+      },
       JWT_SECRET,
       { expiresIn: '24h' }
     );
@@ -244,11 +281,13 @@ app.post('/api/auth/login', async (req, res) => {
     res.json({
       token,
       user: {
-        id: user.id.toString(),
-        username: user.username
+        id: user._id.toString(),
+        username: user.username,
+        email: user.email
       }
     });
   } catch (error) {
+    console.error('Login error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -284,7 +323,7 @@ app.post('/api/auth/login', async (req, res) => {
  *       400:
  *         description: Invalid image file
  */
-app.post('/api/crops/predict', upload.single('image'), (req, res) => {
+app.post('/api/crops/predict', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'Invalid image file' });
@@ -295,11 +334,31 @@ app.post('/api/crops/predict', upload.single('image'), (req, res) => {
     const randomDisease = diseases[Math.floor(Math.random() * diseases.length)];
     const confidence = Math.random() * 0.3 + 0.7; // Random confidence between 0.7-1.0
 
+    // Save prediction to database
+    const predictionData = {
+      imagePath: `uploads/${Date.now()}-${req.file.originalname}`, // In real app, save file first
+      originalFileName: req.file.originalname,
+      prediction: {
+        disease: randomDisease,
+        confidence: Math.round(confidence * 100) / 100
+      }
+    };
+
+    // Add user ID if authenticated
+    if (req.user) {
+      predictionData.userId = req.user.id;
+    }
+
+    const prediction = new Prediction(predictionData);
+    await prediction.save();
+
     res.json({
       prediction: randomDisease,
-      confidence: Math.round(confidence * 100) / 100
+      confidence: Math.round(confidence * 100) / 100,
+      predictionId: prediction._id
     });
   } catch (error) {
+    console.error('Prediction error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -498,25 +557,42 @@ app.post('/api/recommendation', (req, res) => {
  *                 message:
  *                   type: string
  */
-app.post('/api/feedback', (req, res) => {
+app.post('/api/feedback', async (req, res) => {
   try {
-    const { user_id, message } = req.body;
+    const { user_id, message, category, rating } = req.body;
 
     if (!user_id || !message) {
       return res.status(400).json({ error: 'user_id and message are required' });
     }
 
-    const newFeedback = {
-      id: feedback.length + 1,
-      user_id,
-      message,
-      timestamp: new Date().toISOString()
-    };
+    // Verify user exists
+    const user = await User.findById(user_id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
 
-    feedback.push(newFeedback);
+    const newFeedback = new Feedback({
+      userId: user_id,
+      message: message.trim(),
+      category: category || 'general',
+      rating: rating || null
+    });
 
-    res.json({ message: 'Feedback received' });
+    await newFeedback.save();
+
+    res.json({ 
+      message: 'Feedback received',
+      feedbackId: newFeedback._id
+    });
   } catch (error) {
+    console.error('Feedback error:', error);
+    
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({ error: errors.join(', ') });
+    }
+    
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -546,19 +622,17 @@ app.post('/api/feedback', (req, res) => {
  *       403:
  *         description: Invalid token
  */
-app.get('/api/user/profile', authenticateToken, (req, res) => {
+app.get('/api/user/profile', authenticateToken, async (req, res) => {
   try {
-    const user = users.find(u => u.id === req.user.id);
+    const user = await User.findById(req.user.id).select('-password');
     
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    res.json({
-      username: user.username,
-      email: user.email
-    });
+    res.json(user.getPublicProfile());
   } catch (error) {
+    console.error('Profile fetch error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -597,29 +671,311 @@ app.get('/api/user/profile', authenticateToken, (req, res) => {
  *       403:
  *         description: Invalid token
  */
-app.put('/api/user/profile', authenticateToken, (req, res) => {
+app.put('/api/user/profile', authenticateToken, async (req, res) => {
   try {
-    const { username, email } = req.body;
-    const userIndex = users.findIndex(u => u.id === req.user.id);
+    const { username, email, location, farmSize, cropTypes } = req.body;
     
-    if (userIndex === -1) {
+    const user = await User.findById(req.user.id);
+    
+    if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
     // Check if new email is already taken by another user
-    if (email && email !== users[userIndex].email) {
-      const emailExists = users.some(u => u.email === email && u.id !== req.user.id);
+    if (email && email !== user.email) {
+      const emailExists = await User.findOne({ 
+        email: email.toLowerCase().trim(), 
+        _id: { $ne: user._id } 
+      });
       if (emailExists) {
         return res.status(400).json({ error: 'Email already exists' });
       }
     }
 
     // Update user profile
-    if (username) users[userIndex].username = username;
-    if (email) users[userIndex].email = email;
+    const updateData = {};
+    if (username) updateData.username = username.trim();
+    if (email) updateData.email = email.toLowerCase().trim();
+    if (location) updateData.location = location.trim();
+    if (farmSize !== undefined) updateData.farmSize = farmSize;
+    if (cropTypes) updateData.cropTypes = cropTypes;
 
-    res.json({ message: 'Profile updated' });
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user.id, 
+      updateData, 
+      { new: true, runValidators: true }
+    ).select('-password');
+
+    res.json({ 
+      message: 'Profile updated',
+      user: updatedUser.getPublicProfile()
+    });
   } catch (error) {
+    console.error('Profile update error:', error);
+    
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({ error: errors.join(', ') });
+    }
+    
+    // Handle duplicate key error
+    if (error.code === 11000) {
+      return res.status(400).json({ error: 'Email already exists' });
+    }
+    
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Add these endpoints to your server.js file (before the health check endpoint)
+
+/**
+ * @swagger
+ * /api/user/predictions:
+ *   get:
+ *     summary: Get user's prediction history
+ *     tags: [User Profile]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Number of predictions to return
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number
+ *     responses:
+ *       200:
+ *         description: User prediction history retrieved successfully
+ */
+app.get('/api/user/predictions', authenticateToken, async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 10;
+    const page = parseInt(req.query.page) || 1;
+    const skip = (page - 1) * limit;
+
+    const predictions = await Prediction.find({ userId: req.user.id })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .skip(skip)
+      .select('prediction cropType createdAt verified');
+
+    const total = await Prediction.countDocuments({ userId: req.user.id });
+
+    res.json({
+      predictions,
+      pagination: {
+        current: page,
+        pages: Math.ceil(total / limit),
+        total,
+        hasNext: page * limit < total,
+        hasPrev: page > 1
+      }
+    });
+  } catch (error) {
+    console.error('Prediction history error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/admin/feedback:
+ *   get:
+ *     summary: Get all feedback (Admin only - for demo purposes)
+ *     tags: [Admin]
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [pending, reviewed, resolved, closed]
+ *         description: Filter by feedback status
+ *     responses:
+ *       200:
+ *         description: Feedback retrieved successfully
+ */
+app.get('/api/admin/feedback', async (req, res) => {
+  try {
+    const { status, category } = req.query;
+    const filter = {};
+    
+    if (status) filter.status = status;
+    if (category) filter.category = category;
+
+    const feedbacks = await Feedback.find(filter)
+      .populate('userId', 'username email')
+      .sort({ createdAt: -1 })
+      .limit(50);
+
+    res.json(feedbacks);
+  } catch (error) {
+    console.error('Admin feedback error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/stats/dashboard:
+ *   get:
+ *     summary: Get dashboard statistics
+ *     tags: [Statistics]
+ *     responses:
+ *       200:
+ *         description: Dashboard stats retrieved successfully
+ */
+app.get('/api/stats/dashboard', async (req, res) => {
+  try {
+    // Get various statistics
+    const [
+      totalUsers,
+      totalPredictions,
+      totalFeedback,
+      recentPredictions,
+      diseaseStats
+    ] = await Promise.all([
+      User.countDocuments({ isActive: true }),
+      Prediction.countDocuments(),
+      Feedback.countDocuments(),
+      Prediction.find().sort({ createdAt: -1 }).limit(5).select('prediction.disease createdAt'),
+      Prediction.aggregate([
+        {
+          $group: {
+            _id: '$prediction.disease',
+            count: { $sum: 1 },
+            avgConfidence: { $avg: '$prediction.confidence' }
+          }
+        },
+        { $sort: { count: -1 } },
+        { $limit: 5 }
+      ])
+    ]);
+
+    res.json({
+      summary: {
+        totalUsers,
+        totalPredictions,
+        totalFeedback,
+        activeUsers: totalUsers // For demo - in real app, count active users differently
+      },
+      recentActivity: recentPredictions,
+      diseaseDistribution: diseaseStats
+    });
+  } catch (error) {
+    console.error('Dashboard stats error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/user/delete:
+ *   delete:
+ *     summary: Delete user account
+ *     tags: [User Profile]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               password:
+ *                 type: string
+ *                 description: User's password for confirmation
+ *     responses:
+ *       200:
+ *         description: Account deleted successfully
+ */
+app.delete('/api/user/delete', authenticateToken, async (req, res) => {
+  try {
+    const { password } = req.body;
+
+    if (!password) {
+      return res.status(400).json({ error: 'Password confirmation required' });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Verify password
+    const isValidPassword = await user.comparePassword(password);
+    if (!isValidPassword) {
+      return res.status(401).json({ error: 'Invalid password' });
+    }
+
+    // Soft delete - deactivate account instead of hard delete
+    await User.findByIdAndUpdate(req.user.id, { isActive: false });
+
+    res.json({ message: 'Account deactivated successfully' });
+  } catch (error) {
+    console.error('Delete account error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/predictions/search:
+ *   get:
+ *     summary: Search predictions by disease or crop type
+ *     tags: [Crop Prediction]
+ *     parameters:
+ *       - in: query
+ *         name: disease
+ *         schema:
+ *           type: string
+ *         description: Search by disease name
+ *       - in: query
+ *         name: cropType
+ *         schema:
+ *           type: string
+ *         description: Search by crop type
+ *       - in: query
+ *         name: verified
+ *         schema:
+ *           type: boolean
+ *         description: Filter by verification status
+ *     responses:
+ *       200:
+ *         description: Predictions search results
+ */
+app.get('/api/predictions/search', async (req, res) => {
+  try {
+    const { disease, cropType, verified } = req.query;
+    const filter = {};
+
+    if (disease) {
+      filter['prediction.disease'] = new RegExp(disease, 'i');
+    }
+    if (cropType) {
+      filter.cropType = cropType;
+    }
+    if (verified !== undefined) {
+      filter.verified = verified === 'true';
+    }
+
+    const predictions = await Prediction.find(filter)
+      .populate('userId', 'username')
+      .sort({ createdAt: -1 })
+      .limit(20)
+      .select('prediction cropType createdAt verified userId');
+
+    res.json(predictions);
+  } catch (error) {
+    console.error('Prediction search error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -642,10 +998,11 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Endpoint not found' });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
+  // Connect to MongoDB
+  await connectDB();
+  
   console.log(`🚀 AnnData API Server running on port ${PORT}`);
   console.log(`📖 API Documentation available at http://localhost:${PORT}/api-docs`);
   console.log(`🏥 Health check available at http://localhost:${PORT}/health`);
-
-
 });
