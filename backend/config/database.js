@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const connectDB = async () => {
   try {
-    const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/anndata';
+    const mongoURI = process.env.MONGODB_URI || 'mongodb+srv://viveknaik0309:Vivek%401234@cluster0.ctp7ogo.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
     
     const options = {
       // Use new URL parser

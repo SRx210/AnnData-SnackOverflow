@@ -9,7 +9,7 @@ const AnnDataApp = () => {
   const [notifications, setNotifications] = useState([]);
   
   // API Configuration
-  const api_base_url = 'https://ann-data-api.onrender.com/api-docs';
+  const api_base_url = 'http://localhost:3000/api-docs';
   const weather_api_key = process.env.react_weather_api_key;
   const prediction_endpoint = '/api/crops/predict';
   const weather_endpoint = '/api/weather';
