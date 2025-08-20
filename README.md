@@ -24,7 +24,7 @@ Our mission is to modernize Indian farming through **data-driven decisions** and
 ## 🛠 Tech Stack
 - **Frontend:** React.js (Axios for API calls, CSS Flex/Grid for layout, Responsive Design)
 - **Backend:** Node.js (Express.js)
-- **Database:** TBD (Planned: MongoDB / PostgreSQL)
+- **Database:** MongoDB
 - **AI/ML:** (TBD)
 - **Hosting:** Render (Backend), Netlify/Vercel (Planned for Frontend)
 
