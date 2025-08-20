@@ -10,8 +10,7 @@ const AnnDataApp = () => {
   const [loading, setLoading] = useState(false);
   
   // API Configuration
-  const API_BASE_URL = process.env.API_BASE_URL;
-  const WEATHER_API_KEY = process.env.REACT_APP_WEATHER_API_KEY;
+  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:3000/api';
   
   // Fetch user profile from backend
   const fetchUserProfile = useCallback(async () => {
