@@ -10,7 +10,7 @@ const AnnDataApp = () => {
   const [loading, setLoading] = useState(false);
   
   // API Configuration
-  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:3000/api';
+  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://ann-data-api.onrender.com/api';
   
   // Fetch user profile from backend
   const fetchUserProfile = useCallback(async () => {
