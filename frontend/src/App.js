@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Upload, Cloud, Users, Leaf, User, MessageCircle, LogIn, LogOut, Search, MapPin, Phone, Mail, Star, Camera, TrendingUp, Droplets, Sun, AlertCircle, CheckCircle, Calendar } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Upload, Cloud, Users, Leaf, User, MessageCircle, LogIn, LogOut, Search, MapPin, Phone, Mail, Star, Camera, TrendingUp, Droplets, Sun, AlertCircle, CheckCircle } from 'lucide-react';
 import './App.css';
 
 const AnnDataApp = () => {
@@ -10,18 +10,11 @@ const AnnDataApp = () => {
   const [loading, setLoading] = useState(false);
   
   // API Configuration
-  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "https://ann-data-api.onrender.com/api";;
-  const WEATHER_API_KEY = process.env.REACT_APP_WEATHER_API_KEY || 'your_weather_api_key_here';
+  const API_BASE_URL = process.env.API_BASE_URL;
+  const WEATHER_API_KEY = process.env.REACT_APP_WEATHER_API_KEY;
   
-  // Check if user is logged in on app load
-  useEffect(() => {
-    if (token) {
-      fetchUserProfile();
-    }
-  }, [token]);
-
   // Fetch user profile from backend
-  const fetchUserProfile = async () => {
+  const fetchUserProfile = useCallback(async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/user/profile`, {
         headers: {
@@ -45,7 +38,14 @@ const AnnDataApp = () => {
       setToken(null);
       setUser(null);
     }
-  };
+  }, [token, API_BASE_URL]);
+  
+  // Check if user is logged in on app load
+  useEffect(() => {
+    if (token) {
+      fetchUserProfile();
+    }
+  }, [token, fetchUserProfile]);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -510,8 +510,6 @@ const AnnDataApp = () => {
     );
   };
 
-
-
   const WeatherPage = () => {
     const [location, setLocation] = useState('');
     const [weather, setWeather] = useState(null);
@@ -643,8 +641,6 @@ const AnnDataApp = () => {
       </div>
     );
   };
-
-
 
   const RecommendationPage = () => {
     const [soilType, setSoilType] = useState('');
@@ -789,7 +785,7 @@ const AnnDataApp = () => {
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
 
-    const searchSuppliers = async () => {
+    const searchSuppliers = useCallback(async () => {
       setLoading(true);
       setMessage('');
       
@@ -825,11 +821,11 @@ const AnnDataApp = () => {
       }
       
       setLoading(false);
-    };
+    }, [searchTerm, API_BASE_URL, token]);
 
     useEffect(() => {
       searchSuppliers();
-    }, [category]);
+    }, [category, searchSuppliers]);
 
     return (
       <div className="page-bg">
@@ -1073,14 +1069,7 @@ const AnnDataApp = () => {
     const [stats, setStats] = useState([]);
     const [activities, setActivities] = useState([]);
 
-    useEffect(() => {
-      if (user) {
-        fetchUserStats();
-        fetchUserActivity();
-      }
-    }, [user]);
-
-    const fetchUserStats = async () => {
+    const fetchUserStats = useCallback(async () => {
       try {
         const response = await fetch(`${API_BASE_URL}/stats/dashboard`, {
           headers: {
@@ -1100,9 +1089,9 @@ const AnnDataApp = () => {
       } catch (error) {
         console.error('Error fetching stats:', error);
       }
-    };
+    }, [API_BASE_URL, token, user]);
 
-    const fetchUserActivity = async () => {
+    const fetchUserActivity = useCallback(async () => {
       try {
         const response = await fetch(`${API_BASE_URL}/user/predictions?limit=5`, {
           headers: {
@@ -1123,7 +1112,14 @@ const AnnDataApp = () => {
       } catch (error) {
         console.error('Error fetching activity:', error);
       }
-    };
+    }, [API_BASE_URL, token]);
+
+    useEffect(() => {
+      if (user) {
+        fetchUserStats();
+        fetchUserActivity();
+      }
+    }, [user, fetchUserStats, fetchUserActivity]);
 
     const handleProfileUpdate = async () => {
       setLoading(true);
