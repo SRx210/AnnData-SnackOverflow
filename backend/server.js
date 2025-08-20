@@ -35,11 +35,6 @@ const upload = multer({
   }
 });
 
-// In-memory data storage (removed - using MongoDB now)
-// let users = [];
-// let feedback = [];
-// let userCounter = 1;
-
 // Swagger configuration
 const swaggerOptions = {
   definition: {
@@ -367,7 +362,7 @@ app.post('/api/crops/predict', upload.single('image'), async (req, res) => {
  * @swagger
  * /api/weather:
  *   get:
- *     summary: Get weather forecast for location
+ *     summary: Get exact weather forecast for location
  *     tags: [Weather]
  *     parameters:
  *       - in: query
@@ -379,17 +374,9 @@ app.post('/api/crops/predict', upload.single('image'), async (req, res) => {
  *     responses:
  *       200:
  *         description: Weather forecast retrieved successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 location:
- *                   type: string
- *                 forecast:
- *                   type: string
  */
-app.get('/api/weather', (req, res) => {
+
+app.get('/api/weather', async (req, res) => {
   try {
     const { location } = req.query;
     
@@ -397,23 +384,148 @@ app.get('/api/weather', (req, res) => {
       return res.status(400).json({ error: 'Location parameter is required' });
     }
 
-    // Mock weather data
-    const forecasts = [
-      'Cloudy with light rain',
-      'Sunny and clear',
-      'Partly cloudy',
-      'Thunderstorms expected',
-      'Overcast with moderate rain'
-    ];
+    console.log(`🌤️ Fetching weather for: ${location}`);
 
-    const randomForecast = forecasts[Math.floor(Math.random() * forecasts.length)];
+    // Use tomorrow.io API for EXACT weather data
+    if (process.env.TOMORROW_API_KEY) {
+      try {
+        // Get current weather with precise location
+        const weatherUrl = `https://api.tomorrow.io/v4/weather/realtime?location=${encodeURIComponent(location)}&apikey=${process.env.TOMORROW_API_KEY}&units=metric`;
+        console.log('🌐 Calling weather API...');
+        
+        const weatherResponse = await fetch(weatherUrl);
+        console.log('📡 Weather API response status:', weatherResponse.status);
+        
+        if (weatherResponse.ok) {
+          const weatherData = await weatherResponse.json();
+          console.log('📊 Weather data received successfully');
+          
+          // Debug the actual structure
+          console.log('🔍 Data structure debug:');
+          console.log('weatherData keys:', Object.keys(weatherData));
+          console.log('weatherData.data keys:', weatherData.data ? Object.keys(weatherData.data) : 'No data');
+          if (weatherData.data && weatherData.data.location) {
+            console.log('weatherData.data.location keys:', Object.keys(weatherData.data.location));
+          }
+          
+          // Check if we have the required data structure
+          if (weatherData.data && weatherData.data.values) {
+            const values = weatherData.data.values;
+            
+            // Handle location data - it might be in a different structure
+            let locationData = null;
+            if (weatherData.data.location) {
+              locationData = weatherData.data.location;
+            } else if (weatherData.location) {
+              locationData = weatherData.location;
+            } else {
+              // Create a fallback location object
+              locationData = {
+                name: location,
+                lat: 0,
+                lon: 0,
+                type: 'unknown'
+              };
+            }
+            
+            console.log('✅ Valid weather data structure');
+            console.log('📍 Location data found:', !!locationData);
+            console.log('🌡️ Temperature:', values.temperature);
+            
+            // Get detailed forecast for next 7 days
+            let forecastData = [];
+            try {
+              const forecastUrl = `https://api.tomorrow.io/v4/weather/forecast?location=${encodeURIComponent(location)}&apikey=${process.env.TOMORROW_API_KEY}&units=metric&timesteps=1d&fields=temperature,humidity,windSpeed,weatherCode,precipitationProbability,cloudCover`;
+              console.log('🌐 Calling forecast API...');
+              
+              const forecastResponse = await fetch(forecastUrl);
+              
+              if (forecastResponse.ok) {
+                const forecast = await forecastResponse.json();
+                console.log('📅 Forecast data received');
+                
+                if (forecast.data && forecast.data.timelines && forecast.data.timelines[0]) {
+                  forecastData = forecast.data.timelines[0].intervals.slice(0, 7).map(interval => ({
+                    day: new Date(interval.startTime).toLocaleDateString('en', { weekday: 'short' }),
+                    condition: getWeatherDescription(interval.values.weatherCode),
+                    temp: Math.round(interval.values.temperature * 10) / 10,
+                    humidity: Math.round(interval.values.humidity),
+                    windSpeed: Math.round(interval.values.windSpeed * 3.6),
+                    precipitation: Math.round(interval.values.precipitationProbability),
+                    cloudCover: Math.round(interval.values.cloudCover),
+                    icon: getWeatherIcon(interval.values.weatherCode)
+                  }));
+                  console.log(' Forecast processed:', forecastData.length, 'days');
+                }
+              } else {
+                console.log('⚠️ Forecast API failed, continuing with current weather only');
+              }
+            } catch (forecastError) {
+              console.log('⚠️ Forecast fetch failed:', forecastError.message);
+            }
+            
+            // Return EXACT weather data
+            const exactWeather = {
+              location: locationData.name || location,
+              coordinates: {
+                lat: locationData.lat || 0,
+                lon: locationData.lon || 0
+              },
+              current: {
+                temperature: Math.round(values.temperature * 10) / 10,
+                humidity: Math.round(values.humidity),
+                windSpeed: Math.round(values.windSpeed * 3.6),
+                weatherCode: values.weatherCode,
+                condition: getWeatherDescription(values.weatherCode),
+                icon: getWeatherIcon(values.weatherCode),
+                feelsLike: Math.round(values.temperatureApparent * 10) / 10,
+                pressure: Math.round(values.pressureSeaLevel),
+                visibility: Math.round(values.visibility),
+                uvIndex: Math.round(values.uvIndex),
+                cloudCover: Math.round(values.cloudCover)
+              },
+              forecast: forecastData,
+              lastUpdated: new Date().toISOString(),
+              dataSource: 'tomorrow.io'
+            };
+            
+            console.log(`✅ Exact weather for ${location}: ${exactWeather.current.temperature}°C`);
+            return res.json(exactWeather);
+          } else {
+            console.log('❌ Missing required data structure');
+            console.log('weatherData.data exists:', !!weatherData.data);
+            console.log('weatherData.data.values exists:', !!(weatherData.data && weatherData.data.values));
+            throw new Error('Missing required data structure');
+          }
+        } else {
+          const errorData = await weatherResponse.json();
+          console.error('❌ Weather API error:', errorData);
+          throw new Error(`Weather API error: ${weatherResponse.status}`);
+        }
+      } catch (apiError) {
+        console.error('❌ Tomorrow.io API failed:', apiError.message);
+        throw new Error(`Weather API failed: ${apiError.message}`);
+      }
+    } else {
+      throw new Error('Tomorrow.io API key not configured');
+    }
 
-    res.json({
-      location: location,
-      forecast: randomForecast
-    });
   } catch (error) {
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('❌ Weather error:', error.message);
+    
+    // Return error with fallback data
+    res.status(500).json({ 
+      error: error.message,
+      fallback: {
+        location: req.query.location,
+        message: 'Using fallback data due to API error',
+        current: {
+          temperature: 'N/A',
+          condition: 'Service unavailable',
+          icon: '⚠️'
+        }
+      }
+    });
   }
 });
 
@@ -649,13 +761,13 @@ app.get('/api/user/profile', authenticateToken, async (req, res) => {
  *       required: true
  *       content:
  *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               username:
- *                 type: string
- *               email:
- *                 type: string
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 username:
+ *                   type: string
+ *                 email:
+ *                   type: string
  *     responses:
  *       200:
  *         description: Profile updated successfully
@@ -727,8 +839,6 @@ app.put('/api/user/profile', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
-
-// Add these endpoints to your server.js file (before the health check endpoint)
 
 /**
  * @swagger
@@ -998,11 +1108,83 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Endpoint not found' });
 });
 
+// Helper function to convert tomorrow.io weather codes to descriptions
+function getWeatherDescription(weatherCode) {
+  const weatherDescriptions = {
+    1000: 'Clear',
+    1001: 'Cloudy',
+    1100: 'Mostly Clear',
+    1101: 'Partly Cloudy',
+    1102: 'Mostly Cloudy',
+    2000: 'Fog',
+    2100: 'Light Fog',
+    4000: 'Drizzle',
+    4001: 'Rain',
+    4200: 'Light Rain',
+    4201: 'Heavy Rain',
+    5000: 'Snow',
+    5001: 'Flurries',
+    5100: 'Light Snow',
+    5101: 'Heavy Snow',
+    6000: 'Freezing Drizzle',
+    6001: 'Freezing Rain',
+    6200: 'Light Freezing Rain',
+    6201: 'Heavy Freezing Rain',
+    7000: 'Ice Pellets',
+    7101: 'Heavy Ice Pellets',
+    7102: 'Light Ice Pellets',
+    8000: 'Thunderstorm'
+  };
+  return weatherDescriptions[weatherCode] || 'Unknown';
+}
+
+// Helper function to get weather condition category
+function getWeatherCondition(weatherCode) {
+  if (weatherCode >= 1000 && weatherCode < 2000) return 'Clear';
+  if (weatherCode >= 2000 && weatherCode < 3000) return 'Foggy';
+  if (weatherCode >= 4000 && weatherCode < 5000) return 'Rainy';
+  if (weatherCode >= 5000 && weatherCode < 6000) return 'Snowy';
+  if (weatherCode >= 6000 && weatherCode < 7000) return 'Freezing';
+  if (weatherCode >= 7000 && weatherCode < 8000) return 'Icy';
+  if (weatherCode >= 8000) return 'Thunderstorm';
+  return 'Unknown';
+}
+
+// Helper function to get weather icon
+function getWeatherIcon(weatherCode) {
+  const icons = {
+    1000: '☀️', // Clear
+    1001: '☁️', // Cloudy
+    1100: '��️', // Mostly Clear
+    1101: '⛅', // Partly Cloudy
+    1102: '��️', // Mostly Cloudy
+    2000: '��️', // Fog
+    2100: '🌫️', // Light Fog
+    4000: '��️', // Drizzle
+    4001: '��️', // Rain
+    4200: '🌦️', // Light Rain
+    4201: '🌧️', // Heavy Rain
+    5000: '❄️', // Snow
+    5001: '🌨️', // Flurries
+    5100: '🌨️', // Light Snow
+    5101: '❄️', // Heavy Snow
+    6000: '🧊', // Freezing Drizzle
+    6001: '🌨️', // Freezing Rain
+    6200: '🧊', // Light Freezing Rain
+    6201: '🧊', // Heavy Freezing Rain
+    7000: '🧊', // Ice Pellets
+    7101: '🧊', // Heavy Ice Pellets
+    7102: '🧊', // Light Ice Pellets
+    8000: '⛈️'  // Thunderstorm
+  };
+  return icons[weatherCode] || '��️';
+}
+
 app.listen(PORT, async () => {
   // Connect to MongoDB
   await connectDB();
   
-  console.log(`🚀 AnnData API Server running on port ${PORT}`);
+  console.log(`�� AnnData API Server running on port ${PORT}`);
   console.log(`📖 API Documentation available at http://localhost:${PORT}/api-docs`);
   console.log(`🏥 Health check available at http://localhost:${PORT}/health`);
 });

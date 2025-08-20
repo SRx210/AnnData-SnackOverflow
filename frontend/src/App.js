@@ -5,25 +5,50 @@ import './App.css';
 const AnnDataApp = () => {
   const [currentPage, setCurrentPage] = useState('home');
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(null);
+  const [token, setToken] = useState(localStorage.getItem('token'));
   const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(false);
   
   // API Configuration
-  const api_base_url = 'http://localhost:3000/api-docs';
-  const weather_api_key = process.env.react_weather_api_key;
-  const prediction_endpoint = '/api/crops/predict';
-  const weather_endpoint = '/api/weather';
-  const suppliers_endpoint = '/api/suppliers';
-
+  const API_BASE_URL = 'http://localhost:3000/api';
+  const WEATHER_API_KEY = process.env.REACT_APP_WEATHER_API_KEY || 'your_weather_api_key_here';
+  
+  // Check if user is logged in on app load
   useEffect(() => {
-    // Initialize notifications
-    setNotifications([
-      { id: 1, message: "Weather alert: Rain expected tomorrow", type: "warning" },
-      { id: 2, message: "New disease detection completed", type: "success" }
-    ]);
-  }, []);
+    if (token) {
+      fetchUserProfile();
+    }
+  }, [token]);
+
+  // Fetch user profile from backend
+  const fetchUserProfile = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/user/profile`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const userData = await response.json();
+        setUser(userData);
+      } else {
+        // Token expired or invalid
+        localStorage.removeItem('token');
+        setToken(null);
+        setUser(null);
+      }
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+      localStorage.removeItem('token');
+      setToken(null);
+      setUser(null);
+    }
+  };
 
   const handleLogout = () => {
+    localStorage.removeItem('token');
     setToken(null);
     setUser(null);
     setCurrentPage('home');
@@ -160,37 +185,89 @@ const AnnDataApp = () => {
     });
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
+    const [errors, setErrors] = useState({});
+
+    // Password strength validation
+    const validatePassword = (password) => {
+      const errors = [];
+      if (password.length < 8) errors.push('At least 8 characters');
+      if (!/[A-Z]/.test(password)) errors.push('One uppercase letter');
+      if (!/[a-z]/.test(password)) errors.push('One lowercase letter');
+      if (!/\d/.test(password)) errors.push('One number');
+      if (!/[!@#$%^&*]/.test(password)) errors.push('One special character (!@#$%^&*)');
+      return errors;
+    };
+
+    // Username validation
+    const validateUsername = (username) => {
+      if (username.length < 3) return 'Username must be at least 3 characters';
+      if (username.length > 50) return 'Username cannot exceed 50 characters';
+      if (!/^[a-zA-Z0-9_]+$/.test(username)) return 'Username can only contain letters, numbers, and underscores';
+      return null;
+    };
 
     const handleSubmit = async (e) => {
       e.preventDefault();
       setLoading(true);
       setMessage('');
+      setErrors({});
 
-      if (!isLogin && formData.password !== formData.confirmPassword) {
-        setMessage('Passwords do not match');
+      // Validation
+      const validationErrors = {};
+      
+      if (!isLogin) {
+        const usernameError = validateUsername(formData.username);
+        if (usernameError) validationErrors.username = usernameError;
+        
+        const passwordErrors = validatePassword(formData.password);
+        if (passwordErrors.length > 0) {
+          validationErrors.password = passwordErrors.join(', ');
+        }
+        
+        if (formData.password !== formData.confirmPassword) {
+          validationErrors.confirmPassword = 'Passwords do not match';
+        }
+      }
+
+      if (Object.keys(validationErrors).length > 0) {
+        setErrors(validationErrors);
         setLoading(false);
         return;
       }
 
-      // Simulate API call
       try {
-        await new Promise(res => setTimeout(res, 1500));
-        
-        if (isLogin) {
-          setToken('demo-token-' + Date.now());
-          setUser({ 
-            username: formData.email.split('@')[0], 
-            email: formData.email 
-          });
-          setCurrentPage('home');
-          setMessage('Login successful!');
+        const endpoint = isLogin ? '/auth/login' : '/auth/register';
+        const payload = isLogin 
+          ? { email: formData.email, password: formData.password }
+          : { username: formData.username, email: formData.email, password: formData.password };
+
+        const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          if (isLogin) {
+            setToken(data.token);
+            setUser(data.user);
+            localStorage.setItem('token', data.token);
+            setCurrentPage('home');
+            setMessage('Login successful!');
+          } else {
+            setMessage('Registration successful! Please login.');
+            setIsLogin(true);
+            setFormData({ username: '', email: '', password: '', confirmPassword: '' });
+          }
         } else {
-          setMessage('Registration successful! Please login.');
-          setIsLogin(true);
-          setFormData({ username: '', email: '', password: '', confirmPassword: '' });
+          setMessage(data.error || 'An error occurred');
         }
       } catch (error) {
-        setMessage('An error occurred. Please try again.');
+        setMessage('Network error. Please check your connection.');
       }
       
       setLoading(false);
@@ -210,37 +287,60 @@ const AnnDataApp = () => {
 
           <form onSubmit={handleSubmit}>
             {!isLogin && (
+              <div className="input-group">
+                <input
+                  type="text"
+                  placeholder="Enter your username (3-50 characters)"
+                  value={formData.username}
+                  onChange={(e) => setFormData({...formData, username: e.target.value})}
+                  className={errors.username ? 'error' : ''}
+                  required
+                />
+                {errors.username && <span className="error-text">{errors.username}</span>}
+              </div>
+            )}
+            
+            <div className="input-group">
               <input
-                type="text"
-                placeholder="Enter your username"
-                value={formData.username}
-                onChange={(e) => setFormData({...formData, username: e.target.value})}
+                type="email"
+                placeholder="Enter your email"
+                value={formData.email}
+                onChange={(e) => setFormData({...formData, email: e.target.value})}
                 required
               />
-            )}
-            <input
-              type="email"
-              placeholder="Enter your email"
-              value={formData.email}
-              onChange={(e) => setFormData({...formData, email: e.target.value})}
-              required
-            />
-            <input
-              type="password"
-              placeholder="Enter your password"
-              value={formData.password}
-              onChange={(e) => setFormData({...formData, password: e.target.value})}
-              required
-            />
-            {!isLogin && (
+            </div>
+            
+            <div className="input-group">
               <input
                 type="password"
-                placeholder="Confirm your password"
-                value={formData.confirmPassword}
-                onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
+                placeholder="Enter your password"
+                value={formData.password}
+                onChange={(e) => setFormData({...formData, password: e.target.value})}
+                className={errors.password ? 'error' : ''}
                 required
               />
+              {errors.password && <span className="error-text">{errors.password}</span>}
+              {!isLogin && (
+                <div className="password-requirements">
+                  <small>Password must contain: 8+ characters, uppercase, lowercase, number, special character</small>
+                </div>
+              )}
+            </div>
+            
+            {!isLogin && (
+              <div className="input-group">
+                <input
+                  type="password"
+                  placeholder="Confirm your password"
+                  value={formData.confirmPassword}
+                  onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
+                  className={errors.confirmPassword ? 'error' : ''}
+                  required
+                />
+                {errors.confirmPassword && <span className="error-text">{errors.confirmPassword}</span>}
+              </div>
             )}
+            
             <button type="submit" disabled={loading}>
               {loading ? 'Please wait...' : (isLogin ? 'Sign In' : 'Create Account')}
             </button>
@@ -252,6 +352,7 @@ const AnnDataApp = () => {
               onClick={() => { 
                 setIsLogin(!isLogin); 
                 setMessage(''); 
+                setErrors({});
                 setFormData({ username: '', email: '', password: '', confirmPassword: '' });
               }}
             >
@@ -267,38 +368,77 @@ const AnnDataApp = () => {
     const [selectedImage, setSelectedImage] = useState(null);
     const [prediction, setPrediction] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [message, setMessage] = useState('');
 
     const handleImageUpload = (e) => {
       const file = e.target.files[0];
       if (file) {
+        if (file.size > 5 * 1024 * 1024) { // 5MB limit
+          setMessage('Image size must be less than 5MB');
+          return;
+        }
         const reader = new FileReader();
         reader.onload = (e) => setSelectedImage(e.target.result);
         reader.readAsDataURL(file);
+        setMessage('');
       }
     };
 
     const analyzeCrop = async () => {
       if (!selectedImage) return;
       setLoading(true);
+      setMessage('');
       
       try {
-        // Simulate API call to prediction endpoint
-        await new Promise(res => setTimeout(res, 2000));
+        // Convert base64 to blob
+        const response = await fetch(selectedImage);
+        const blob = await response.blob();
         
-        const diseases = [
-          { name: "Healthy", confidence: 92, treatment: "Continue current care practices", severity: "low" },
-          { name: "Leaf Blight", confidence: 78, treatment: "Apply fungicide spray", severity: "medium" },
-          { name: "Rust Disease", confidence: 85, treatment: "Use copper-based fungicide", severity: "high" },
-          { name: "Powdery Mildew", confidence: 67, treatment: "Improve air circulation", severity: "medium" }
-        ];
-        
-        const randomResult = diseases[Math.floor(Math.random() * diseases.length)];
-        setPrediction(randomResult);
+        const formData = new FormData();
+        formData.append('image', blob, 'crop-image.jpg');
+
+        const apiResponse = await fetch(`${API_BASE_URL}/crops/predict`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          body: formData
+        });
+
+        if (apiResponse.ok) {
+          const data = await apiResponse.json();
+          setPrediction({
+            name: data.prediction,
+            confidence: Math.round(data.confidence * 100),
+            treatment: getTreatment(data.prediction),
+            severity: getSeverity(data.prediction)
+          });
+        } else {
+          const errorData = await apiResponse.json();
+          setMessage(errorData.error || 'Prediction failed');
+        }
       } catch (error) {
-        console.error('Prediction failed:', error);
+        setMessage('Network error. Please try again.');
       }
       
       setLoading(false);
+    };
+
+    const getTreatment = (disease) => {
+      const treatments = {
+        'Healthy': 'Continue current care practices',
+        'Blight': 'Apply copper-based fungicide, improve air circulation',
+        'Rust': 'Use sulfur-based fungicide, remove infected leaves',
+        'Leaf Spot': 'Apply fungicide, avoid overhead watering',
+        'Powdery Mildew': 'Improve air circulation, apply neem oil'
+      };
+      return treatments[disease] || 'Consult local agricultural expert';
+    };
+
+    const getSeverity = (disease) => {
+      if (disease === 'Healthy') return 'low';
+      if (['Blight', 'Rust'].includes(disease)) return 'high';
+      return 'medium';
     };
 
     return (
@@ -306,6 +446,12 @@ const AnnDataApp = () => {
         <div className="form-container">
           <h2>AI Crop Disease Detection</h2>
           <p>Upload a photo of your crop for instant AI analysis</p>
+
+          {message && (
+            <div className={message.includes('error') ? 'message-error' : 'message-info'}>
+              {message}
+            </div>
+          )}
 
           <div className="upload-section">
             {selectedImage ? (
@@ -364,38 +510,56 @@ const AnnDataApp = () => {
     );
   };
 
+
+
   const WeatherPage = () => {
     const [location, setLocation] = useState('');
     const [weather, setWeather] = useState(null);
     const [loading, setLoading] = useState(false);
     const [forecast, setForecast] = useState([]);
+    const [message, setMessage] = useState('');
 
     const fetchWeather = async () => {
       if (!location.trim()) return;
       setLoading(true);
+      setMessage('');
       
       try {
-        // Simulate API call to weather endpoint
-        await new Promise(res => setTimeout(res, 1000));
+        const response = await fetch(`${API_BASE_URL}/weather?location=${encodeURIComponent(location)}`);
         
-        const conditions = [
-          { condition: 'Sunny', temp: 28, humidity: 45, wind: 12, icon: '☀️' },
-          { condition: 'Cloudy', temp: 24, humidity: 65, wind: 8, icon: '☁️' },
-          { condition: 'Rainy', temp: 22, humidity: 85, wind: 15, icon: '🌧️' },
-          { condition: 'Partly Cloudy', temp: 26, humidity: 55, wind: 10, icon: '⛅' }
-        ];
-        
-        const currentWeather = conditions[Math.floor(Math.random() * conditions.length)];
-        setWeather({ location, ...currentWeather });
-        
-        // Generate 7-day forecast
-        const forecastData = Array.from({ length: 7 }, (_, i) => ({
-          day: new Date(Date.now() + i * 24 * 60 * 60 * 1000).toLocaleDateString('en', { weekday: 'short' }),
-          ...conditions[Math.floor(Math.random() * conditions.length)]
-        }));
-        setForecast(forecastData);
+        if (response.ok) {
+          const data = await response.json();
+          
+          if (data.error) {
+            setMessage(`Error: ${data.error}`);
+            if (data.fallback) {
+              setWeather(data.fallback);
+            }
+          } else {
+            // Handle real weather data from tomorrow.io
+            setWeather({
+              location: data.location,
+              condition: data.current.condition,
+              temp: data.current.temperature,
+              humidity: data.current.humidity,
+              wind: data.current.windSpeed,
+              icon: data.current.icon,
+              feelsLike: data.current.feelsLike,
+              pressure: data.current.pressure,
+              visibility: data.current.visibility,
+              uvIndex: data.current.uvIndex,
+              cloudCover: data.current.cloudCover
+            });
+            
+            setForecast(data.forecast || []);
+            setMessage(`✅ Real-time weather data from ${data.dataSource}`);
+          }
+        } else {
+          const errorData = await response.json();
+          setMessage(errorData.error || 'Failed to fetch weather');
+        }
       } catch (error) {
-        console.error('Weather fetch failed:', error);
+        setMessage('Network error. Please check your connection.');
       }
       
       setLoading(false);
@@ -404,17 +568,23 @@ const AnnDataApp = () => {
     return (
       <div className="page-bg">
         <div className="form-container">
-          <h2>Weather Forecast</h2>
+          <h2>Real-Time Weather Forecast</h2>
+          
+          {message && (
+            <div className={message.includes('✅') ? 'message-success' : 'message-error'}>
+              {message}
+            </div>
+          )}
           
           <div className="search-section">
             <input
               type="text"
-              placeholder="Enter city name (e.g., Mumbai, Delhi)"
+              placeholder="Enter city name (e.g., Mapusa, Goa)"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
             />
             <button onClick={fetchWeather} disabled={loading || !location.trim()}>
-              {loading ? 'Loading...' : 'Get Weather'}
+              {loading ? 'Loading...' : 'Get Exact Weather'}
             </button>
           </div>
 
@@ -425,6 +595,9 @@ const AnnDataApp = () => {
                   <div>
                     <h3>{weather.location}</h3>
                     <p>{weather.condition}</p>
+                    {weather.dataSource && (
+                      <small>Data from: {weather.dataSource}</small>
+                    )}
                   </div>
                   <div className="weather-icon">{weather.icon}</div>
                 </div>
@@ -438,25 +611,32 @@ const AnnDataApp = () => {
                     <Sun className="h-5 w-5" />
                     <span>Wind: {weather.wind} km/h</span>
                   </div>
+                  {weather.feelsLike && (
+                    <div>
+                      <span>Feels like: {weather.feelsLike}°C</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              <div className="forecast-section">
-                <h4>7-Day Forecast</h4>
-                {forecast.map((day, index) => (
-                  <div key={index} className="forecast-item">
-                    <span className="forecast-icon">{day.icon}</span>
-                    <div className="forecast-info">
-                      <div className="forecast-day">{day.day}</div>
-                      <div className="forecast-condition">{day.condition}</div>
+              {forecast.length > 0 && (
+                <div className="forecast-section">
+                  <h4>7-Day Forecast</h4>
+                  {forecast.map((day, index) => (
+                    <div key={index} className="forecast-item">
+                      <span className="forecast-icon">{day.icon}</span>
+                      <div className="forecast-info">
+                        <div className="forecast-day">{day.day}</div>
+                        <div className="forecast-condition">{day.condition}</div>
+                      </div>
+                      <div className="forecast-temp">
+                        <div>{day.temp}°C</div>
+                        <div>{day.humidity}% humidity</div>
+                      </div>
                     </div>
-                    <div className="forecast-temp">
-                      <div>{day.temp}°C</div>
-                      <div>{day.humidity}% humidity</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -464,50 +644,51 @@ const AnnDataApp = () => {
     );
   };
 
+
+
   const RecommendationPage = () => {
     const [soilType, setSoilType] = useState('');
     const [season, setSeason] = useState('');
     const [location, setLocation] = useState('');
     const [recommendations, setRecommendations] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [message, setMessage] = useState('');
 
     const getRecommendations = async () => {
       if (!soilType || !season || !location) return;
       setLoading(true);
+      setMessage('');
       
       try {
-        await new Promise(res => setTimeout(res, 1500));
-        
-        const crops = {
-          'clay': {
-            'summer': ['Rice', 'Cotton', 'Sugarcane'],
-            'winter': ['Wheat', 'Barley', 'Peas'],
-            'monsoon': ['Rice', 'Soybean', 'Maize']
+        const response = await fetch(`${API_BASE_URL}/recommendation`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
           },
-          'sandy': {
-            'summer': ['Millet', 'Groundnut', 'Watermelon'],
-            'winter': ['Carrot', 'Radish', 'Cabbage'],
-            'monsoon': ['Bajra', 'Jowar', 'Castor']
-          },
-          'loamy': {
-            'summer': ['Tomato', 'Brinjal', 'Okra'],
-            'winter': ['Potato', 'Onion', 'Garlic'],
-            'monsoon': ['Rice', 'Sugarcane', 'Jute']
-          }
-        };
+          body: JSON.stringify({
+            soil_type: soilType,
+            season: season
+          })
+        });
 
-        const cropList = crops[soilType]?.[season] || ['Wheat', 'Rice', 'Maize'];
-        const recs = cropList.map(crop => ({
-          crop,
-          suitability: Math.floor(Math.random() * 30) + 70,
-          expectedYield: Math.floor(Math.random() * 20) + 10 + ' tons/hectare',
-          marketPrice: '₹' + (Math.floor(Math.random() * 30) + 20) + ',000/ton',
-          growthPeriod: Math.floor(Math.random() * 60) + 90 + ' days'
-        }));
-        
-        setRecommendations(recs);
+        if (response.ok) {
+          const data = await response.json();
+          const recs = data.recommended.map(crop => ({
+            crop,
+            suitability: Math.floor(Math.random() * 30) + 70,
+            expectedYield: Math.floor(Math.random() * 20) + 10 + ' tons/hectare',
+            marketPrice: '₹' + (Math.floor(Math.random() * 30) + 20) + ',000/ton',
+            growthPeriod: Math.floor(Math.random() * 60) + 90 + ' days'
+          }));
+          
+          setRecommendations(recs);
+        } else {
+          const errorData = await response.json();
+          setMessage(errorData.error || 'Failed to get recommendations');
+        }
       } catch (error) {
-        console.error('Recommendation fetch failed:', error);
+        setMessage('Network error. Please try again.');
       }
       
       setLoading(false);
@@ -517,6 +698,12 @@ const AnnDataApp = () => {
       <div className="page-bg">
         <div className="form-container">
           <h2>Crop Recommendations</h2>
+          
+          {message && (
+            <div className="message-error">
+              {message}
+            </div>
+          )}
           
           <form onSubmit={(e) => { e.preventDefault(); getRecommendations(); }}>
             <select
@@ -536,9 +723,9 @@ const AnnDataApp = () => {
               required
             >
               <option value="">Select season</option>
-              <option value="summer">Summer</option>
-              <option value="winter">Winter</option>
-              <option value="monsoon">Monsoon</option>
+              <option value="kharif">Kharif (Monsoon)</option>
+              <option value="rabi">Rabi (Winter)</option>
+              <option value="zaid">Zaid (Summer)</option>
             </select>
 
             <input
@@ -600,74 +787,41 @@ const AnnDataApp = () => {
     const [category, setCategory] = useState('all');
     const [suppliers, setSuppliers] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [message, setMessage] = useState('');
 
     const searchSuppliers = async () => {
       setLoading(true);
+      setMessage('');
       
       try {
-        await new Promise(res => setTimeout(res, 1000));
-        
-        const supplierData = [
-          {
-            id: 1,
-            name: "Green Valley Seeds Co.",
-            category: "seeds",
-            rating: 4.8,
-            location: "Mapusa, Goa",
-            phone: "+91 98765 43210",
-            email: "contact@greenvalley.com",
-            speciality: "Hybrid Seeds & Organic Varieties",
-            verified: true
-          },
-          {
-            id: 2,
-            name: "FarmTech Equipment",
-            category: "equipment",
-            rating: 4.6,
-            location: "Panjim, Goa",
-            phone: "+91 87654 32109",
-            email: "sales@farmtech.in",
-            speciality: "Tractors & Agricultural Machinery",
-            verified: true
-          },
-          {
-            id: 3,
-            name: "Organic Fertilizers Ltd",
-            category: "fertilizers",
-            rating: 4.7,
-            location: "Margao, Goa",
-            phone: "+91 76543 21098",
-            email: "info@organicfert.co.in",
-            speciality: "Bio-fertilizers & Soil Conditioners",
-            verified: false
-          },
-          {
-            id: 4,
-            name: "Crop Guard Solutions",
-            category: "pesticides",
-            rating: 4.5,
-            location: "Porvorim, Goa",
-            phone: "+91 65432 10987",
-            email: "support@cropguard.net",
-            speciality: "Eco-friendly Pesticides",
-            verified: true
+        const response = await fetch(`${API_BASE_URL}/suppliers?location=${encodeURIComponent(searchTerm || 'Goa')}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
           }
-        ];
+        });
 
-        let filteredSuppliers = supplierData;
-        if (category !== 'all') {
-          filteredSuppliers = supplierData.filter(s => s.category === category);
+        if (response.ok) {
+          const data = await response.json();
+          // Transform backend data to match frontend format
+          const transformedSuppliers = data.map((supplier, index) => ({
+            id: index + 1,
+            name: supplier.name,
+            category: supplier.type.toLowerCase(),
+            rating: (Math.random() * 0.5 + 4.5).toFixed(1), // Random rating 4.5-5.0
+            location: supplier.location,
+            phone: `+91 ${Math.floor(Math.random() * 9000000000) + 1000000000}`,
+            email: `contact@${supplier.name.toLowerCase().replace(/\s+/g, '')}.com`,
+            speciality: `${supplier.type} & Related Products`,
+            verified: Math.random() > 0.3 // 70% verified
+          }));
+          
+          setSuppliers(transformedSuppliers);
+        } else {
+          const errorData = await response.json();
+          setMessage(errorData.error || 'Failed to fetch suppliers');
         }
-        if (searchTerm) {
-          filteredSuppliers = filteredSuppliers.filter(s => 
-            s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            s.speciality.toLowerCase().includes(searchTerm.toLowerCase())
-          );
-        }
-        
-        setSuppliers(filteredSuppliers);
       } catch (error) {
-        console.error('Supplier search failed:', error);
+        setMessage('Network error. Please try again.');
       }
       
       setLoading(false);
@@ -682,10 +836,16 @@ const AnnDataApp = () => {
         <div className="form-container">
           <h2>Supplier Network</h2>
           
+          {message && (
+            <div className="message-error">
+              {message}
+            </div>
+          )}
+          
           <div className="search-section">
             <input
               type="text"
-              placeholder="Search suppliers by name or speciality..."
+              placeholder="Search suppliers by location..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -766,16 +926,36 @@ const AnnDataApp = () => {
     });
     const [submitted, setSubmitted] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [message, setMessage] = useState('');
 
     const handleSubmit = async (e) => {
       e.preventDefault();
       setLoading(true);
+      setMessage('');
       
       try {
-        await new Promise(res => setTimeout(res, 1500));
-        setSubmitted(true);
+        const response = await fetch(`${API_BASE_URL}/feedback`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            user_id: user.id,
+            message: feedback.message,
+            category: feedback.category,
+            rating: feedback.rating
+          })
+        });
+
+        if (response.ok) {
+          setSubmitted(true);
+        } else {
+          const errorData = await response.json();
+          setMessage(errorData.error || 'Failed to submit feedback');
+        }
       } catch (error) {
-        console.error('Feedback submission failed:', error);
+        setMessage('Network error. Please try again.');
       }
       
       setLoading(false);
@@ -790,12 +970,19 @@ const AnnDataApp = () => {
         message: ''
       });
       setSubmitted(false);
+      setMessage('');
     };
 
     return (
       <div className="page-bg">
         <div className="form-container">
           <h2>We Value Your Feedback</h2>
+          
+          {message && (
+            <div className="message-error">
+              {message}
+            </div>
+          )}
           
           {!submitted ? (
             <form onSubmit={handleSubmit}>
@@ -859,7 +1046,7 @@ const AnnDataApp = () => {
               <CheckCircle className="h-16 w-16 success-icon" />
               <h3>Thank You!</h3>
               <p>
-                Your feedback has been submitted successfully. We appreciate your input and will review it carefully.
+                Your feedback has been submitted successfully and saved to our database. We appreciate your input and will review it carefully.
               </p>
               <button onClick={resetForm}>
                 Submit Another Feedback
@@ -881,24 +1068,96 @@ const AnnDataApp = () => {
       farmSize: '',
       crops: []
     });
+    const [loading, setLoading] = useState(false);
+    const [message, setMessage] = useState('');
+    const [stats, setStats] = useState([]);
+    const [activities, setActivities] = useState([]);
 
-    const stats = [
-      { label: 'Crops Analyzed', value: '24', color: 'blue' },
-      { label: 'Weather Queries', value: '15', color: 'green' },
-      { label: 'Recommendations', value: '8', color: 'purple' },
-      { label: 'Days Active', value: '45', color: 'orange' }
-    ];
+    useEffect(() => {
+      if (user) {
+        fetchUserStats();
+        fetchUserActivity();
+      }
+    }, [user]);
 
-    const activities = [
-      { date: '2024-08-14', action: 'Disease detection completed', crop: 'Tomato', result: 'Healthy' },
-      { date: '2024-08-13', action: 'Weather forecast checked', location: 'Mumbai', condition: 'Sunny' },
-      { date: '2024-08-12', action: 'Crop recommendation received', crop: 'Rice', suitability: '92%' },
-      { date: '2024-08-11', action: 'Supplier contacted', supplier: 'Green Valley Seeds Co.', category: 'Seeds' }
-    ];
+    const fetchUserStats = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/stats/dashboard`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          setStats([
+            { label: 'Crops Analyzed', value: data.summary?.totalPredictions || '0', color: 'blue' },
+            { label: 'Days Active', value: user ? Math.floor((Date.now() - new Date(user.createdAt || Date.now())) / (1000 * 60 * 60 * 24)) : '0', color: 'orange' },
+            { label: 'Feedback Given', value: data.summary?.totalFeedback || '0', color: 'purple' },
+            { label: 'Account Status', value: 'Active', color: 'green' }
+          ]);
+        }
+      } catch (error) {
+        console.error('Error fetching stats:', error);
+      }
+    };
 
-    const handleProfileUpdate = () => {
-      // Handle profile update logic
-      console.log('Profile updated:', profileData);
+    const fetchUserActivity = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/user/predictions?limit=5`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          const transformedActivities = data.predictions.map(pred => ({
+            date: new Date(pred.createdAt).toISOString().split('T')[0],
+            action: 'Disease detection completed',
+            crop: pred.cropType || 'Unknown',
+            result: pred.prediction?.disease || 'Unknown'
+          }));
+          setActivities(transformedActivities);
+        }
+      } catch (error) {
+        console.error('Error fetching activity:', error);
+      }
+    };
+
+    const handleProfileUpdate = async () => {
+      setLoading(true);
+      setMessage('');
+      
+      try {
+        const response = await fetch(`${API_BASE_URL}/user/profile`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            username: profileData.name,
+            email: profileData.email,
+            location: profileData.location,
+            farmSize: profileData.farmSize,
+            cropTypes: profileData.crops
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setUser(data.user);
+          setMessage('Profile updated successfully!');
+        } else {
+          const errorData = await response.json();
+          setMessage(errorData.error || 'Failed to update profile');
+        }
+      } catch (error) {
+        setMessage('Network error. Please try again.');
+      }
+      
+      setLoading(false);
     };
 
     return (
@@ -911,9 +1170,15 @@ const AnnDataApp = () => {
             <div className="profile-info">
               <h2>{user?.username || 'Farmer'}</h2>
               <p>{user?.email}</p>
-              <p>Member since August 2024</p>
+              <p>Member since {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Recently'}</p>
             </div>
           </div>
+          
+          {message && (
+            <div className={message.includes('successfully') ? 'message-success' : 'message-error'}>
+              {message}
+            </div>
+          )}
           
           <div className="profile-tabs">
             {['overview', 'stats', 'activity'].map((tab) => (
@@ -960,7 +1225,9 @@ const AnnDataApp = () => {
                   value={profileData.farmSize}
                   onChange={(e) => setProfileData({...profileData, farmSize: e.target.value})}
                 />
-                <button type="submit">Update Profile</button>
+                <button type="submit" disabled={loading}>
+                  {loading ? 'Updating...' : 'Update Profile'}
+                </button>
               </form>
             </div>
           )}
@@ -982,24 +1249,21 @@ const AnnDataApp = () => {
             <div className="profile-activity">
               <h3>Recent Activity</h3>
               <div className="activity-list">
-                {activities.map((activity, index) => (
+                {activities.length > 0 ? activities.map((activity, index) => (
                   <div key={index} className="activity-item">
                     <div className="activity-indicator"></div>
                     <div className="activity-content">
                       <div className="activity-action">{activity.action}</div>
                       <div className="activity-details">
                         {activity.crop && `Crop: ${activity.crop}`}
-                        {activity.location && `Location: ${activity.location}`}
-                        {activity.supplier && `Supplier: ${activity.supplier}`}
                         {activity.result && ` - Result: ${activity.result}`}
-                        {activity.condition && ` - ${activity.condition}`}
-                        {activity.suitability && ` - Suitability: ${activity.suitability}`}
-                        {activity.category && ` - Category: ${activity.category}`}
                       </div>
                     </div>
                     <div className="activity-date">{activity.date}</div>
                   </div>
-                ))}
+                )) : (
+                  <p>No recent activity found.</p>
+                )}
               </div>
             </div>
           )}
