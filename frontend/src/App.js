@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Upload, Cloud, Users, Leaf, User, MessageCircle, LogIn, LogOut, Search, MapPin, Phone, Mail, Star, Camera, TrendingUp, Droplets, Sun, AlertCircle, CheckCircle } from 'lucide-react';
 import './App.css';
 
@@ -11,36 +11,33 @@ const AnnDataApp = () => {
   // API Configuration
   const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://ann-data-api.onrender.com/api';
   
-  // Fetch user profile from backend
-  const fetchUserProfile = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/user/profile`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (response.ok) {
-        const userData = await response.json();
-        setUser(userData);
-      } else {
-        // Token expired or invalid
-        localStorage.removeItem('token');
-        setToken(null);
-        setUser(null);
-      }
-    } catch (error) {
-      console.error('Error fetching user profile:', error);
-      localStorage.removeItem('token');
-      setToken(null);
-      setUser(null);
-    }
-  };
-  
   // Check if user is logged in on app load
   useEffect(() => {
     if (token) {
+      const fetchUserProfile = async () => {
+        try {
+          const response = await fetch(`${API_BASE_URL}/user/profile`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          if (response.ok) {
+            const userData = await response.json();
+            setUser(userData);
+          } else {
+            localStorage.removeItem('token');
+            setToken(null);
+            setUser(null);
+          }
+        } catch (error) {
+          console.error('Error fetching user profile:', error);
+          localStorage.removeItem('token');
+          setToken(null);
+          setUser(null);
+        }
+      };
       fetchUserProfile();
     }
   }, [token]);
@@ -822,7 +819,42 @@ const AnnDataApp = () => {
     };
 
     useEffect(() => {
-      searchSuppliers();
+      const runSearch = async () => {
+        setLoading(true);
+        setMessage('');
+        
+        try {
+          const response = await fetch(`${API_BASE_URL}/suppliers?location=${encodeURIComponent(searchTerm || 'Goa')}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            const transformedSuppliers = data.map((supplier, index) => ({
+              id: index + 1,
+              name: supplier.name,
+              category: supplier.type.toLowerCase(),
+              rating: (Math.random() * 0.5 + 4.5).toFixed(1),
+              location: supplier.location,
+              phone: `+91 ${Math.floor(Math.random() * 9000000000) + 1000000000}`,
+              email: `contact@${supplier.name.toLowerCase().replace(/\s+/g, '')}.com`,
+              speciality: `${supplier.type} & Related Products`,
+              verified: Math.random() > 0.3
+            }));
+            setSuppliers(transformedSuppliers);
+          } else {
+            const errorData = await response.json();
+            setMessage(errorData.error || 'Failed to fetch suppliers');
+          }
+        } catch (error) {
+          setMessage('Network error. Please try again.');
+        }
+        
+        setLoading(false);
+      };
+      runSearch();
     }, [category]);
 
     return (
@@ -1067,57 +1099,50 @@ const AnnDataApp = () => {
     const [stats, setStats] = useState([]);
     const [activities, setActivities] = useState([]);
 
-    const fetchUserStats = async () => {
-      try {
-        const response = await fetch(`${API_BASE_URL}/stats/dashboard`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          setStats([
-            { label: 'Crops Analyzed', value: data.summary?.totalPredictions || '0', color: 'blue' },
-            { label: 'Days Active', value: user ? Math.floor((Date.now() - new Date(user.createdAt || Date.now())) / (1000 * 60 * 60 * 24)) : '0', color: 'orange' },
-            { label: 'Feedback Given', value: data.summary?.totalFeedback || '0', color: 'purple' },
-            { label: 'Account Status', value: 'Active', color: 'green' }
-          ]);
-        }
-      } catch (error) {
-        console.error('Error fetching stats:', error);
-      }
-    };
-
-    const fetchUserActivity = async () => {
-      try {
-        const response = await fetch(`${API_BASE_URL}/user/predictions?limit=5`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          const transformedActivities = data.predictions.map(pred => ({
-            date: new Date(pred.createdAt).toISOString().split('T')[0],
-            action: 'Disease detection completed',
-            crop: pred.cropType || 'Unknown',
-            result: pred.prediction?.disease || 'Unknown'
-          }));
-          setActivities(transformedActivities);
-        }
-      } catch (error) {
-        console.error('Error fetching activity:', error);
-      }
-    };
-
     useEffect(() => {
-      if (user) {
-        fetchUserStats();
-        fetchUserActivity();
-      }
-    }, [user]);
+      if (!token) return;
+      const run = async () => {
+        try {
+          const statsResponse = await fetch(`${API_BASE_URL}/stats/dashboard`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          if (statsResponse.ok) {
+            const data = await statsResponse.json();
+            setStats([
+              { label: 'Crops Analyzed', value: data.summary?.totalPredictions || '0', color: 'blue' },
+              { label: 'Days Active', value: user ? Math.floor((Date.now() - new Date(user.createdAt || Date.now())) / (1000 * 60 * 60 * 24)) : '0', color: 'orange' },
+              { label: 'Feedback Given', value: data.summary?.totalFeedback || '0', color: 'purple' },
+              { label: 'Account Status', value: 'Active', color: 'green' }
+            ]);
+          }
+        } catch (error) {
+          console.error('Error fetching stats:', error);
+        }
+
+        try {
+          const actResponse = await fetch(`${API_BASE_URL}/user/predictions?limit=5`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          if (actResponse.ok) {
+            const data = await actResponse.json();
+            const transformedActivities = data.predictions.map(pred => ({
+              date: new Date(pred.createdAt).toISOString().split('T')[0],
+              action: 'Disease detection completed',
+              crop: pred.cropType || 'Unknown',
+              result: pred.prediction?.disease || 'Unknown'
+            }));
+            setActivities(transformedActivities);
+          }
+        } catch (error) {
+          console.error('Error fetching activity:', error);
+        }
+      };
+      run();
+    }, [token]);
 
     const handleProfileUpdate = async () => {
       setLoading(true);
