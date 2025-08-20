@@ -6,14 +6,13 @@ const AnnDataApp = () => {
   const [currentPage, setCurrentPage] = useState('home');
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('token'));
-  const [notifications, setNotifications] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const notifications = [];
   
   // API Configuration
   const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://ann-data-api.onrender.com/api';
   
   // Fetch user profile from backend
-  const fetchUserProfile = useCallback(async () => {
+  const fetchUserProfile = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/user/profile`, {
         headers: {
@@ -37,14 +36,14 @@ const AnnDataApp = () => {
       setToken(null);
       setUser(null);
     }
-  }, [token, API_BASE_URL]);
+  };
   
   // Check if user is logged in on app load
   useEffect(() => {
     if (token) {
       fetchUserProfile();
     }
-  }, [token, fetchUserProfile]);
+  }, [token]);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -784,7 +783,7 @@ const AnnDataApp = () => {
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
 
-    const searchSuppliers = useCallback(async () => {
+    const searchSuppliers = async () => {
       setLoading(true);
       setMessage('');
       
@@ -820,11 +819,11 @@ const AnnDataApp = () => {
       }
       
       setLoading(false);
-    }, [searchTerm, API_BASE_URL, token]);
+    };
 
     useEffect(() => {
       searchSuppliers();
-    }, [category, searchSuppliers]);
+    }, [category]);
 
     return (
       <div className="page-bg">
@@ -1068,7 +1067,7 @@ const AnnDataApp = () => {
     const [stats, setStats] = useState([]);
     const [activities, setActivities] = useState([]);
 
-    const fetchUserStats = useCallback(async () => {
+    const fetchUserStats = async () => {
       try {
         const response = await fetch(`${API_BASE_URL}/stats/dashboard`, {
           headers: {
@@ -1088,9 +1087,9 @@ const AnnDataApp = () => {
       } catch (error) {
         console.error('Error fetching stats:', error);
       }
-    }, [API_BASE_URL, token, user]);
+    };
 
-    const fetchUserActivity = useCallback(async () => {
+    const fetchUserActivity = async () => {
       try {
         const response = await fetch(`${API_BASE_URL}/user/predictions?limit=5`, {
           headers: {
@@ -1111,14 +1110,14 @@ const AnnDataApp = () => {
       } catch (error) {
         console.error('Error fetching activity:', error);
       }
-    }, [API_BASE_URL, token]);
+    };
 
     useEffect(() => {
       if (user) {
         fetchUserStats();
         fetchUserActivity();
       }
-    }, [user, fetchUserStats, fetchUserActivity]);
+    }, [user]);
 
     const handleProfileUpdate = async () => {
       setLoading(true);
