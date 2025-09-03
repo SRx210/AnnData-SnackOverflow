@@ -5,6 +5,7 @@ const multer = require('multer');
 const jwt = require('jsonwebtoken');
 const swaggerUi = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
+const axios = require('axios');
 
 // Database connection
 const connectDB = require('./config/database');
@@ -16,7 +17,10 @@ const Prediction = require('./models/Prediction');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-here';
+const JWT_SECRET = process.env.JWT_SECRET;
+
+// ML API Configuration
+const ML_API_BASE = process.env.ML_API_BASE || 'http://localhost:5000';
 
 // Middleware
 app.use(cors());
@@ -1087,6 +1091,210 @@ app.get('/api/predictions/search', async (req, res) => {
   } catch (error) {
     console.error('Prediction search error:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ===== ML API INTEGRATION ENDPOINTS =====
+
+/**
+ * @swagger
+ * /api/ml/crop-recommendation:
+ *   post:
+ *     summary: Get AI-powered crop recommendations based on soil and environmental data
+ *     tags: [ML - Crop Intelligence]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [N, P, K, temperature, humidity, ph, rainfall]
+ *             properties:
+ *               N:
+ *                 type: number
+ *               P:
+ *                 type: number
+ *               K:
+ *                 type: number
+ *               temperature:
+ *                 type: number
+ *               humidity:
+ *                 type: number
+ *               ph:
+ *                 type: number
+ *               rainfall:
+ *                 type: number
+ *     responses:
+ *       200:
+ *         description: Crop recommendations retrieved successfully
+ */
+app.post('/api/ml/crop-recommendation', async (req, res) => {
+  try {
+    const { N, P, K, temperature, humidity, ph, rainfall } = req.body;
+
+    // Validate required fields
+    const requiredFields = ['N', 'P', 'K', 'temperature', 'humidity', 'ph', 'rainfall'];
+    for (const field of requiredFields) {
+      if (req.body[field] === undefined || req.body[field] === null) {
+        return res.status(400).json({ error: `Missing required field: ${field}` });
+      }
+    }
+
+    // Call ML API
+    const response = await axios.post(`${ML_API_BASE}/api/ml/crop-recommendation`, {
+      N: parseFloat(N),
+      P: parseFloat(P),
+      K: parseFloat(K),
+      temperature: parseFloat(temperature),
+      humidity: parseFloat(humidity),
+      ph: parseFloat(ph),
+      rainfall: parseFloat(rainfall)
+    }, {
+      timeout: 10000,
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    res.json(response.data);
+  } catch (error) {
+    console.error('ML Crop Recommendation error:', error.message);
+    
+    if (error.code === 'ECONNREFUSED') {
+      return res.status(503).json({ 
+        error: 'ML service unavailable. Please ensure the ML API server is running.',
+        fallback: 'Please check your soil conditions and consult local agricultural experts.'
+      });
+    }
+    
+    res.status(500).json({ 
+      error: 'Failed to get crop recommendation',
+      details: error.response?.data?.error || error.message
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/ml/demand-forecast:
+ *   post:
+ *     summary: Get market demand forecast for specific crop and region
+ *     tags: [ML - Market Intelligence]
+ */
+app.post('/api/ml/demand-forecast', async (req, res) => {
+  try {
+    const { year, month, region, crop } = req.body;
+
+    if (!year || !month || !region || !crop) {
+      return res.status(400).json({ error: 'year, month, region, and crop are required' });
+    }
+
+    const response = await axios.post(`${ML_API_BASE}/api/ml/demand-forecast`, {
+      year: parseInt(year),
+      month: parseInt(month),
+      region: region.toString(),
+      crop: crop.toString()
+    }, {
+      timeout: 10000,
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    res.json(response.data);
+  } catch (error) {
+    console.error('ML Demand Forecast error:', error.message);
+    
+    if (error.code === 'ECONNREFUSED') {
+      return res.status(503).json({ 
+        error: 'ML service unavailable',
+        fallback: 'Market demand data temporarily unavailable'
+      });
+    }
+    
+    res.status(500).json({ 
+      error: 'Failed to get demand forecast',
+      details: error.response?.data?.error || error.message
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/ml/crop-rotation:
+ *   post:
+ *     summary: Get intelligent crop rotation recommendations
+ *     tags: [ML - Crop Intelligence]
+ */
+app.post('/api/ml/crop-rotation', async (req, res) => {
+  try {
+    const { 
+      current_crop, soil_type, temperature, humidity, moisture, 
+      nitrogen, phosphorous, potassium, top_k = 5 
+    } = req.body;
+
+    const requiredFields = [
+      'current_crop', 'soil_type', 'temperature', 'humidity', 
+      'moisture', 'nitrogen', 'phosphorous', 'potassium'
+    ];
+    
+    for (const field of requiredFields) {
+      if (req.body[field] === undefined || req.body[field] === null) {
+        return res.status(400).json({ error: `Missing required field: ${field}` });
+      }
+    }
+
+    const response = await axios.post(`${ML_API_BASE}/api/ml/crop-rotation`, {
+      current_crop: current_crop.toString(),
+      soil_type: soil_type.toString(),
+      temperature: parseFloat(temperature),
+      humidity: parseFloat(humidity),
+      moisture: parseFloat(moisture),
+      nitrogen: parseFloat(nitrogen),
+      phosphorous: parseFloat(phosphorous),
+      potassium: parseFloat(potassium),
+      top_k: parseInt(top_k)
+    }, {
+      timeout: 10000,
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    res.json(response.data);
+  } catch (error) {
+    console.error('ML Crop Rotation error:', error.message);
+    
+    if (error.code === 'ECONNREFUSED') {
+      return res.status(503).json({ 
+        error: 'ML service unavailable',
+        fallback: 'Crop rotation recommendations temporarily unavailable'
+      });
+    }
+    
+    res.status(500).json({ 
+      error: 'Failed to get crop rotation recommendations',
+      details: error.response?.data?.error || error.message
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/ml/health:
+ *   get:
+ *     summary: Check ML service health status
+ *     tags: [ML - System]
+ */
+app.get('/api/ml/health', async (req, res) => {
+  try {
+    const response = await axios.get(`${ML_API_BASE}/health`, { timeout: 5000 });
+    res.json({
+      status: 'OK',
+      ml_service: response.data,
+      integration: 'Backend successfully connected to ML service'
+    });
+  } catch (error) {
+    res.status(503).json({
+      status: 'ERROR',
+      error: 'ML service unavailable',
+      details: error.message,
+      ml_api_base: ML_API_BASE
+    });
   }
 });
 

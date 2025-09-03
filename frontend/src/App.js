@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, Cloud, Users, Leaf, User, MessageCircle, LogIn, LogOut, Search, MapPin, Phone, Mail, Star, Camera, TrendingUp, Droplets, Sun, AlertCircle, CheckCircle } from 'lucide-react';
+import { Upload, Cloud, Users, Leaf, User, MessageCircle, LogIn, LogOut, Search, MapPin, Phone, Mail, Star, Camera, TrendingUp, Droplets, Sun, AlertCircle, CheckCircle, Brain, BarChart3, Repeat, Activity } from 'lucide-react';
+import axios from 'axios';
 import './App.css';
 
 const AnnDataApp = () => {
@@ -9,7 +10,7 @@ const AnnDataApp = () => {
   const notifications = [];
   
   // API Configuration
-  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://ann-data-api.onrender.com/api';
+  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:3000/api';
   
   // Check if user is logged in on app load
   useEffect(() => {
@@ -56,13 +57,13 @@ const AnnDataApp = () => {
         <h1>AnnData - Kisan 2.0</h1>
       </div>
       <div className="navbar-buttons">
-        {['home', 'predict', 'weather', 'recommend', 'suppliers', 'feedback'].map((page) => (
+        {['home', 'predict', 'weather', 'ml-insights', 'suppliers', 'feedback'].map((page) => (
           <button
             key={page}
             onClick={() => setCurrentPage(page)}
             className={currentPage === page ? 'active' : ''}
           >
-            {page.charAt(0).toUpperCase() + page.slice(1)}
+            {page === 'ml-insights' ? 'ML Insights' : page.charAt(0).toUpperCase() + page.slice(1)}
           </button>
         ))}
       </div>
@@ -127,6 +128,12 @@ const AnnDataApp = () => {
               title: "Smart Weather Forecasts", 
               description: "Get hyper-local weather predictions and agricultural alerts for your specific location.",
               page: "weather"
+            },
+            {
+              icon: <Brain className="h-8 w-8" />,
+              title: "AI Crop Intelligence",
+              description: "Advanced ML-powered crop recommendations, demand forecasting, and rotation planning.",
+              page: "ml-insights"
             },
             {
               icon: <Leaf className="h-8 w-8" />,
@@ -498,6 +505,433 @@ const AnnDataApp = () => {
                 </div>
                 <p><strong>Treatment:</strong> {prediction.treatment}</p>
               </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const MLInsightsPage = () => {
+    const [activeTab, setActiveTab] = useState('crop-recommendation');
+    const [loading, setLoading] = useState(false);
+    const [message, setMessage] = useState('');
+
+    // Crop Recommendation State
+    const [cropFormData, setCropFormData] = useState({
+      N: '',
+      P: '',
+      K: '',
+      temperature: '',
+      humidity: '',
+      ph: '',
+      rainfall: ''
+    });
+    const [cropRecommendation, setCropRecommendation] = useState(null);
+
+    // Demand Forecasting State
+    const [demandFormData, setDemandFormData] = useState({
+      year: new Date().getFullYear(),
+      month: new Date().getMonth() + 1,
+      region: '',
+      crop: ''
+    });
+    const [demandForecast, setDemandForecast] = useState(null);
+
+    // Crop Rotation State
+    const [rotationFormData, setRotationFormData] = useState({
+      current_crop: '',
+      soil_type: '',
+      temperature: '',
+      humidity: '',
+      moisture: '',
+      nitrogen: '',
+      phosphorous: '',
+      potassium: '',
+      top_k: 5
+    });
+    const [rotationRecommendations, setRotationRecommendations] = useState(null);
+
+    // API call functions
+    const getCropRecommendation = async () => {
+      setLoading(true);
+      setMessage('');
+      
+      try {
+        const response = await axios.post(`${API_BASE_URL}/ml/crop-recommendation`, cropFormData, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        console.log('Crop recommendation response:', response.data);
+        if (response.data && (response.data.success !== false)) {
+          const data = response.data.data || response.data;
+          setCropRecommendation(data);
+          setMessage('✅ AI crop recommendation generated successfully!');
+        } else {
+          setMessage(response.data.error || 'Failed to get crop recommendation');
+        }
+      } catch (error) {
+        setMessage(error.response?.data?.error || 'Network error. Please try again.');
+      }
+      
+      setLoading(false);
+    };
+
+    const getDemandForecast = async () => {
+      setLoading(true);
+      setMessage('');
+      
+      try {
+        const response = await axios.post(`${API_BASE_URL}/ml/demand-forecast`, demandFormData, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        console.log('Demand forecast response:', response.data);
+        if (response.data && (response.data.success !== false)) {
+          const data = response.data.data || response.data;
+          setDemandForecast(data);
+          setMessage('✅ Market demand forecast generated successfully!');
+        } else {
+          setMessage(response.data.error || 'Failed to get demand forecast');
+        }
+      } catch (error) {
+        setMessage(error.response?.data?.error || 'Network error. Please try again.');
+      }
+      
+      setLoading(false);
+    };
+
+    const getCropRotation = async () => {
+      setLoading(true);
+      setMessage('');
+      
+      try {
+        const response = await axios.post(`${API_BASE_URL}/ml/crop-rotation`, rotationFormData, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        console.log('Crop rotation response:', response.data);
+        if (response.data && (response.data.success !== false)) {
+          const data = response.data.data || response.data;
+          setRotationRecommendations(data);
+          setMessage('✅ Crop rotation recommendations generated successfully!');
+        } else {
+          setMessage(response.data.error || 'Failed to get crop rotation recommendations');
+        }
+      } catch (error) {
+        setMessage(error.response?.data?.error || 'Network error. Please try again.');
+      }
+      
+      setLoading(false);
+    };
+
+    return (
+      <div className="page-bg">
+        <div className="form-container">
+          <h2>🧠 AI-Powered Agricultural Intelligence</h2>
+          <p>Advanced machine learning insights for smart farming decisions</p>
+
+          {message && (
+            <div className={message.includes('✅') ? 'message-success' : 'message-error'}>
+              {message}
+            </div>
+          )}
+
+          <div className="ml-tabs">
+            {[
+              { id: 'crop-recommendation', label: 'Crop Recommendation', icon: <Brain className="h-5 w-5" /> },
+              { id: 'demand-forecast', label: 'Market Forecast', icon: <BarChart3 className="h-5 w-5" /> },
+              { id: 'crop-rotation', label: 'Crop Rotation', icon: <Repeat className="h-5 w-5" /> }
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`ml-tab-button ${activeTab === tab.id ? 'active' : ''}`}
+              >
+                {tab.icon}
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {activeTab === 'crop-recommendation' && (
+            <div className="ml-section">
+              <h3>🌱 AI Crop Recommendation</h3>
+              <p>Get personalized crop suggestions based on soil and environmental conditions</p>
+              
+              <form onSubmit={(e) => { e.preventDefault(); getCropRecommendation(); }}>
+                <div className="form-grid">
+                  <input
+                    type="number"
+                    placeholder="Nitrogen (N) content"
+                    value={cropFormData.N}
+                    onChange={(e) => setCropFormData({...cropFormData, N: e.target.value})}
+                    required
+                  />
+                  <input
+                    type="number"
+                    placeholder="Phosphorous (P) content"
+                    value={cropFormData.P}
+                    onChange={(e) => setCropFormData({...cropFormData, P: e.target.value})}
+                    required
+                  />
+                  <input
+                    type="number"
+                    placeholder="Potassium (K) content"
+                    value={cropFormData.K}
+                    onChange={(e) => setCropFormData({...cropFormData, K: e.target.value})}
+                    required
+                  />
+                  <input
+                    type="number"
+                    placeholder="Temperature (°C)"
+                    value={cropFormData.temperature}
+                    onChange={(e) => setCropFormData({...cropFormData, temperature: e.target.value})}
+                    required
+                  />
+                  <input
+                    type="number"
+                    placeholder="Humidity (%)"
+                    value={cropFormData.humidity}
+                    onChange={(e) => setCropFormData({...cropFormData, humidity: e.target.value})}
+                    required
+                  />
+                  <input
+                    type="number"
+                    step="0.1"
+                    placeholder="Soil pH level"
+                    value={cropFormData.ph}
+                    onChange={(e) => setCropFormData({...cropFormData, ph: e.target.value})}
+                    required
+                  />
+                  <input
+                    type="number"
+                    placeholder="Rainfall (mm)"
+                    value={cropFormData.rainfall}
+                    onChange={(e) => setCropFormData({...cropFormData, rainfall: e.target.value})}
+                    required
+                  />
+                </div>
+                
+                <button type="submit" disabled={loading}>
+                  {loading ? 'Analyzing...' : 'Get AI Recommendation'}
+                </button>
+              </form>
+
+              {cropRecommendation && (
+                <div className="ml-results">
+                  <h4>🎯 AI Crop Recommendation Results</h4>
+                  {cropRecommendation.primary_recommendation && (
+                    <div className="primary-recommendation">
+                      <h5>Top Recommendation: <strong>{cropRecommendation.primary_recommendation}</strong></h5>
+                    </div>
+                  )}
+                  
+                  {cropRecommendation.all_recommendations && cropRecommendation.all_recommendations.length > 0 ? (
+                    <div className="recommendations-grid">
+                      {cropRecommendation.all_recommendations.map((rec, index) => (
+                        <div key={index} className="recommendation-card">
+                          <h5>{rec.crop}</h5>
+                          <div className="confidence-bar">
+                            <div 
+                              className="confidence-fill"
+                              style={{ width: `${rec.confidence * 100}%` }}
+                            ></div>
+                          </div>
+                          <p>Confidence: {Math.round(rec.confidence * 100)}%</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="debug-info">
+                      <p><strong>Debug:</strong> Response data structure:</p>
+                      <pre>{JSON.stringify(cropRecommendation, null, 2)}</pre>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'demand-forecast' && (
+            <div className="ml-section">
+              <h3>📈 Market Demand Forecasting</h3>
+              <p>Predict market demand for crops to optimize your planting decisions</p>
+              
+              <form onSubmit={(e) => { e.preventDefault(); getDemandForecast(); }}>
+                <div className="form-grid">
+                  <input
+                    type="number"
+                    placeholder="Year"
+                    value={demandFormData.year}
+                    onChange={(e) => setDemandFormData({...demandFormData, year: e.target.value})}
+                    required
+                  />
+                  <select
+                    value={demandFormData.month}
+                    onChange={(e) => setDemandFormData({...demandFormData, month: e.target.value})}
+                    required
+                  >
+                    {Array.from({length: 12}, (_, i) => (
+                      <option key={i+1} value={i+1}>
+                        {new Date(0, i).toLocaleString('default', { month: 'long' })}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    placeholder="Region (e.g., Maharashtra)"
+                    value={demandFormData.region}
+                    onChange={(e) => setDemandFormData({...demandFormData, region: e.target.value})}
+                    required
+                  />
+                  <input
+                    type="text"
+                    placeholder="Crop name (e.g., Rice)"
+                    value={demandFormData.crop}
+                    onChange={(e) => setDemandFormData({...demandFormData, crop: e.target.value})}
+                    required
+                  />
+                </div>
+                
+                <button type="submit" disabled={loading}>
+                  {loading ? 'Forecasting...' : 'Get Market Forecast'}
+                </button>
+              </form>
+
+              {demandForecast && (
+                <div className="ml-results">
+                  <h4>📊 Market Demand Forecast Results</h4>
+                  {demandForecast.predicted_demand ? (
+                    <div className="forecast-card">
+                      <p><strong>Predicted Demand:</strong> {demandForecast.predicted_demand}</p>
+                      <p><strong>Confidence:</strong> {Math.round((demandForecast.confidence || 0) * 100)}%</p>
+                      <p><strong>Market Trend:</strong> {demandForecast.trend || 'N/A'}</p>
+                      {demandForecast.recommendations && (
+                        <div className="forecast-recommendations">
+                          <h5>💡 Recommendations:</h5>
+                          <ul>
+                            {demandForecast.recommendations.map((rec, index) => (
+                              <li key={index}>{rec}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="debug-info">
+                      <p><strong>Debug:</strong> Response data structure:</p>
+                      <pre>{JSON.stringify(demandForecast, null, 2)}</pre>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'crop-rotation' && (
+            <div className="ml-section">
+              <h3>🔄 Smart Crop Rotation</h3>
+              <p>Optimize soil health and yields with AI-powered crop rotation planning</p>
+              
+              <form onSubmit={(e) => { e.preventDefault(); getCropRotation(); }}>
+                <div className="form-grid">
+                  <input
+                    type="text"
+                    placeholder="Current crop"
+                    value={rotationFormData.current_crop}
+                    onChange={(e) => setRotationFormData({...rotationFormData, current_crop: e.target.value})}
+                    required
+                  />
+                  <select
+                    value={rotationFormData.soil_type}
+                    onChange={(e) => setRotationFormData({...rotationFormData, soil_type: e.target.value})}
+                    required
+                  >
+                    <option value="">Select soil type</option>
+                    <option value="clay">Clay</option>
+                    <option value="sandy">Sandy</option>
+                    <option value="loamy">Loamy</option>
+                    <option value="silt">Silt</option>
+                  </select>
+                  <input
+                    type="number"
+                    placeholder="Temperature (°C)"
+                    value={rotationFormData.temperature}
+                    onChange={(e) => setRotationFormData({...rotationFormData, temperature: e.target.value})}
+                    required
+                  />
+                  <input
+                    type="number"
+                    placeholder="Humidity (%)"
+                    value={rotationFormData.humidity}
+                    onChange={(e) => setRotationFormData({...rotationFormData, humidity: e.target.value})}
+                    required
+                  />
+                  <input
+                    type="number"
+                    placeholder="Soil moisture (%)"
+                    value={rotationFormData.moisture}
+                    onChange={(e) => setRotationFormData({...rotationFormData, moisture: e.target.value})}
+                    required
+                  />
+                  <input
+                    type="number"
+                    placeholder="Nitrogen level"
+                    value={rotationFormData.nitrogen}
+                    onChange={(e) => setRotationFormData({...rotationFormData, nitrogen: e.target.value})}
+                    required
+                  />
+                  <input
+                    type="number"
+                    placeholder="Phosphorous level"
+                    value={rotationFormData.phosphorous}
+                    onChange={(e) => setRotationFormData({...rotationFormData, phosphorous: e.target.value})}
+                    required
+                  />
+                  <input
+                    type="number"
+                    placeholder="Potassium level"
+                    value={rotationFormData.potassium}
+                    onChange={(e) => setRotationFormData({...rotationFormData, potassium: e.target.value})}
+                    required
+                  />
+                </div>
+                
+                <button type="submit" disabled={loading}>
+                  {loading ? 'Planning...' : 'Get Rotation Plan'}
+                </button>
+              </form>
+
+              {rotationRecommendations && (
+                <div className="ml-results">
+                  <h4>🌾 Recommended Next Crops</h4>
+                  <div className="rotation-grid">
+                    {rotationRecommendations.recommendations?.map((rec, index) => (
+                      <div key={index} className="rotation-card">
+                        <h5>{rec.crop}</h5>
+                        <p><strong>Suitability:</strong> {rec.suitability_score}%</p>
+                        <p><strong>Benefits:</strong> {rec.benefits}</p>
+                        <div className="suitability-bar">
+                          <div 
+                            className="suitability-fill"
+                            style={{ width: `${rec.suitability_score}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1302,6 +1736,8 @@ const AnnDataApp = () => {
         return user ? <PredictPage /> : <AuthPage />;
       case 'weather':
         return user ? <WeatherPage /> : <AuthPage />;
+      case 'ml-insights':
+        return user ? <MLInsightsPage /> : <AuthPage />;
       case 'recommend':
         return user ? <RecommendationPage /> : <AuthPage />;
       case 'suppliers':
