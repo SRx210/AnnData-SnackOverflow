@@ -27,15 +27,15 @@ def initialize_models():
         
         # Initialize Crop Recommendation Model
         crop_rec_model = CropRecommendationModel()
-        if not crop_rec_model.load_model():
-            print("Training Crop Recommendation Model...")
-            crop_rec_model.train_and_save()
+        # Force retraining to avoid version compatibility issues
+        print("Training Crop Recommendation Model...")
+        crop_rec_model.train_and_save()
         
         # Initialize Demand Forecasting Model
         demand_forecast_model = DemandForecastingModel()
-        if not demand_forecast_model.load_model():
-            print("Training Demand Forecasting Model...")
-            demand_forecast_model.train_and_save()
+        # Force retraining to avoid version compatibility issues
+        print("Training Demand Forecasting Model...")
+        demand_forecast_model.train_and_save()
         
         # Initialize Crop Rotation Recommender
         crop_rotation_recommender = CropRotationRecommender()
