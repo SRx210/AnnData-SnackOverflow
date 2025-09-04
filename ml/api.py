@@ -356,7 +356,8 @@ if __name__ == '__main__':
     # Initialize models on startup
     if initialize_models():
         print("Starting AnnData ML API server...")
-        app.run(host='0.0.0.0', port=5000, debug=True)
+        port = int(os.environ.get('PORT', 5000))
+        app.run(host='0.0.0.0', port=port, debug=False)
     else:
         print("Failed to initialize models. Exiting...")
         sys.exit(1)

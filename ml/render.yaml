@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: ann-data-ml-api
+    env: python
+    buildCommand: pip install -r requirements-render.txt
+    startCommand: python api.py
+    plan: free
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.4
+      - key: PORT
+        generateValue: true
