@@ -1,12 +1,13 @@
 services:
   - type: web
-    name: ann-data-ml-api
+    name: anndata-ml-api
     env: python
-    buildCommand: pip install -r requirements-render.txt
+    runtime: python-3.11.9
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
     startCommand: python api.py
-    plan: free
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.4
-      - key: PORT
-        generateValue: true
+      - key: FLASK_ENV
+        value: production
+      - key: PYTHONPATH
+        value: /opt/render/project/src
+    healthCheckPath: /health
