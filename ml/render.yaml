@@ -2,12 +2,13 @@ services:
   - type: web
     name: anndata-ml-api
     env: python
-    runtime: python-3.11.9
-    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    buildCommand: pip install --upgrade pip setuptools wheel && pip install -r requirements.txt
     startCommand: python api.py
     envVars:
       - key: FLASK_ENV
         value: production
       - key: PYTHONPATH
         value: /opt/render/project/src
+      - key: PYTHON_VERSION
+        value: 3.11.9
     healthCheckPath: /health
