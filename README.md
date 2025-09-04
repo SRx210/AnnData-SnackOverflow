@@ -7,8 +7,9 @@ Our mission is to modernize Indian farming through **data-driven decisions** and
 ---
 
 ## 🚀 Live Deployments
+- **Application:** [https://anndata.netlify.app/](https://anndata.netlify.app/)
 - **Backend API:** [https://ann-data-api.onrender.com](https://ann-data-api.onrender.com)
-- **ML API:** [Your Render ML Deployment URL]
+- **ML API:** [https://ann-data-ml.onrender.com](https://ann-data-ml.onrender.com)
 - **Swagger Documentation:** [https://ann-data-api.onrender.com/api-docs](https://ann-data-api.onrender.com/api-docs)
 - **Local Swagger:** [http://localhost:3000/api-docs](http://localhost:3000/api-docs)
 
@@ -29,7 +30,7 @@ Our mission is to modernize Indian farming through **data-driven decisions** and
 - **Database:** MongoDB with Mongoose ODM
 - **AI/ML:** Python, Flask, scikit-learn, pandas, numpy
 - **ML Models:** RandomForestClassifier, RandomForestRegressor, Custom Rotation Algorithm
-- **Hosting:** Render (Backend + ML API), Netlify/Vercel (Frontend)
+- **Hosting:** Render (Backend + ML API), Netlify (Frontend)
 
 ---
 
@@ -96,61 +97,6 @@ AnnData-SnackOverflow/
 
 ---
 
-## 💻 Local Development Setup
-
-### **Prerequisites**
-- **Node.js v14+** and npm
-- **Python 3.8+** (for ML API)
-- **MongoDB** (local or Atlas)
-- **Git**
-
-### **Quick Start Guide**
-
-#### 1️⃣ **Clone & Setup**
-```bash
-git clone https://github.com/SRx210/AnnData-SnackOverflow.git
-cd AnnData-SnackOverflow
-```
-
-#### 2️⃣ **Backend Setup**
-```bash
-cd backend
-npm install
-npm start  # Runs on http://localhost:3000
-```
-
-#### 3️⃣ **ML API Setup**
-```bash
-cd ../ml
-pip install -r requirements.txt
-python api.py  # Runs on http://localhost:5000
-```
-
-#### 4️⃣ **Frontend Setup**
-```bash
-cd ../frontend
-npm install
-npm start  # Runs on http://localhost:3001
-```
-
-### **Environment Variables**
-Create `.env` files in respective directories:
-
-**Backend (.env):**
-```env
-MONGODB_URI=your_mongodb_connection_string
-JWT_SECRET=your_jwt_secret_key
-ML_API_BASE=http://localhost:5000
-PORT=3000
-```
-
-**Frontend (.env):**
-```env
-REACT_APP_API_BASE_URL=http://localhost:3000/api
-```
-
----
-
 ## 🧪 API Testing & Documentation
 
 ### **Health Check Endpoints**
@@ -203,26 +149,5 @@ Get intelligent crop rotation recommendations:
   "nitrogen": 80, "phosphorous": 40, "potassium": 50
 }
 ```
-
----
-
-## 🚀 Deployment Guide
-
-### **Backend Deployment (Render)**
-1. Connect GitHub repository to Render
-2. Set environment variables in Render dashboard
-3. Deploy with build command: `npm install`
-4. Start command: `npm start`
-
-### **ML API Deployment (Render)**
-1. Create new Web Service on Render
-2. Set build command: `pip install -r requirements.txt`
-3. Start command: `python api.py`
-4. Update backend `ML_API_BASE` environment variable
-
-### **Frontend Deployment (Netlify/Vercel)**
-1. Build command: `npm run build`
-2. Publish directory: `build`
-3. Set `REACT_APP_API_BASE_URL` to your backend URL
 
 ---
