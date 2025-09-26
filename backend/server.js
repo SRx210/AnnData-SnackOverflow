@@ -138,13 +138,18 @@ const authenticateToken = (req, res, next) => {
  *     FeedbackRequest:
  *       type: object
  *       required:
- *         - user_id
  *         - message
  *       properties:
- *         user_id:
- *           type: string
  *         message:
  *           type: string
+ *         category:
+ *           type: string
+ *           enum: [general, bug, feature, improvement, complaint]
+ *           default: general
+ *         rating:
+ *           type: number
+ *           minimum: 1
+ *           maximum: 5
  */
 
 /**
@@ -718,12 +723,28 @@ app.post('/api/recommendation', (req, res) => {
  *   post:
  *     summary: Submit user feedback
  *     tags: [Feedback]
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/FeedbackRequest'
+ *             type: object
+ *             required:
+ *               - message
+ *             properties:
+ *               message:
+ *                 type: string
+ *                 description: The feedback message
+ *               category:
+ *                 type: string
+ *                 enum: [general, bug, feature, improvement, complaint]
+ *                 default: general
+ *               rating:
+ *                 type: number
+ *                 minimum: 1
+ *                 maximum: 5
  *     responses:
  *       200:
  *         description: Feedback received successfully
@@ -734,23 +755,22 @@ app.post('/api/recommendation', (req, res) => {
  *               properties:
  *                 message:
  *                   type: string
+ *                 feedbackId:
+ *                   type: string
  */
-app.post('/api/feedback', async (req, res) => {
+app.post('/api/feedback', authenticateToken, async (req, res) => {
   try {
-    const { user_id, message, category, rating } = req.body;
+    const { message, category, rating } = req.body;
 
-    if (!user_id || !message) {
-      return res.status(400).json({ error: 'user_id and message are required' });
+    if (!message || typeof message !== 'string' || message.trim().length === 0) {
+      return res.status(400).json({ error: 'A valid message is required' });
     }
 
-    // Verify user exists
-    const user = await User.findById(user_id);
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+    const userId = req.user.id; // Get user ID from authenticated token
 
+    // Create and save the feedback
     const newFeedback = new Feedback({
-      userId: user_id,
+      userId,
       message: message.trim(),
       category: category || 'general',
       rating: rating || null
@@ -758,8 +778,8 @@ app.post('/api/feedback', async (req, res) => {
 
     await newFeedback.save();
 
-    res.json({ 
-      message: 'Feedback received',
+    res.status(201).json({ 
+      message: 'Feedback submitted successfully',
       feedbackId: newFeedback._id
     });
   } catch (error) {

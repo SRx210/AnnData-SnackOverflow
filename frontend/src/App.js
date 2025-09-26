@@ -1380,42 +1380,53 @@ const AnnDataApp = () => {
     const [feedback, setFeedback] = useState({
       name: user?.username || '',
       email: user?.email || '',
-      category: '',
-      rating: 5,
+      category: 'general',
+      rating: 0,
       message: ''
     });
-    const [submitted, setSubmitted] = useState(false);
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
+    const [submitted, setSubmitted] = useState(false);
 
-    const handleSubmit = async (e) => {
+    const submitFeedback = async (e) => {
       e.preventDefault();
       setLoading(true);
       setMessage('');
       
       try {
+        // eslint-disable-next-line no-console
+        console.log('Submitting feedback to:', `${API_BASE_URL}/feedback`, 'with token?', !!token);
         const response = await fetch(`${API_BASE_URL}/feedback`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
+            'Authorization': `Bearer ${token}`,
           },
           body: JSON.stringify({
-            user_id: user.id,
             message: feedback.message,
-            category: feedback.category,
-            rating: feedback.rating
+            category: feedback.category || 'general',
+            ...(feedback.rating >= 1 && feedback.rating <= 5 ? { rating: feedback.rating } : {})
           })
         });
 
         if (response.ok) {
           setSubmitted(true);
         } else {
-          const errorData = await response.json();
-          setMessage(errorData.error || 'Failed to submit feedback');
+          let errorText = 'Failed to submit feedback';
+          try {
+            const errorData = await response.json();
+            errorText = errorData.error || errorText;
+          } catch (_) {
+            // ignore
+          }
+          // eslint-disable-next-line no-console
+          console.error('Feedback submit failed:', errorText);
+          setMessage(errorText);
         }
       } catch (error) {
         setMessage('Network error. Please try again.');
+        // eslint-disable-next-line no-console
+        console.error('Feedback submit network error:', error);
       }
       
       setLoading(false);
@@ -1425,8 +1436,8 @@ const AnnDataApp = () => {
       setFeedback({
         name: user?.username || '',
         email: user?.email || '',
-        category: '',
-        rating: 5,
+        category: 'general',
+        rating: 0,
         message: ''
       });
       setSubmitted(false);
@@ -1445,7 +1456,7 @@ const AnnDataApp = () => {
           )}
           
           {!submitted ? (
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={submitFeedback}>
               <input
                 type="text"
                 placeholder="Your Name"
@@ -1465,11 +1476,11 @@ const AnnDataApp = () => {
                 onChange={(e) => setFeedback({...feedback, category: e.target.value})}
                 required
               >
-                <option value="">Select feedback category</option>
-                <option value="feature">Feature Request</option>
-                <option value="bug">Bug Report</option>
-                <option value="general">General Feedback</option>
-                <option value="support">Support Request</option>
+                <option value="general">General</option>
+                <option value="bug">Bug</option>
+                <option value="feature">Feature</option>
+                <option value="improvement">Improvement</option>
+                <option value="complaint">Complaint</option>
               </select>
               
               <div className="rating-section">
