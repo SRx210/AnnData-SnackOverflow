@@ -1,7 +1,7 @@
 # 🌾 AnnData – Team Snack Overflow
 
 ## 📌 Project Description
-**AnnData** is an ML-powered agricultural intelligence platform that empowers farmers with **machine learning-driven crop recommendations**, **market demand forecasting**, and **smart crop rotation planning**.  
+**AnnData** is an AI/ML-powered agricultural intelligence platform that empowers farmers with **machine learning-driven crop recommendations**, **market demand forecasting**, and **smart crop rotation planning**.  
 Our mission is to modernize Indian farming through **data-driven decisions** and **sustainable practices**, benefiting all stakeholders in the agricultural ecosystem.
 
 ---
@@ -151,3 +151,4 @@ Get intelligent crop rotation recommendations:
 ```
 
 ---
+
