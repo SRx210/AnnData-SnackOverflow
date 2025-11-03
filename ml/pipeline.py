@@ -35,10 +35,17 @@ class CropRecommendationModel:
             ('scaler', StandardScaler(), self.feature_columns)
         ])
         
-        # Try different models and select best
+        # Try different models and select best (with regularization to prevent overfitting)
         models = {
-            'RandomForest': RandomForestClassifier(n_estimators=100, random_state=42),
-            'LogisticRegression': LogisticRegression(random_state=42, max_iter=1000)
+            'RandomForest': RandomForestClassifier(
+                n_estimators=100, 
+                random_state=42,
+                max_depth=15,
+                min_samples_split=10,
+                min_samples_leaf=4,
+                max_features='sqrt'
+            ),
+            'LogisticRegression': LogisticRegression(random_state=42, max_iter=1000, C=1.0)
         }
         
         best_score = 0
@@ -115,12 +122,23 @@ class DemandForecastingModel:
         # Load data
         df = pd.read_csv(data_path)
         
-        # Prepare features and target
-        X = df[self.feature_columns]
-        y = df['Market_Demand']
+        # CRITICAL FIX: Use time-based split for temporal data to prevent data leakage
+        # Create date column and sort by time
+        df['Month'] = pd.to_numeric(df['Month'], errors='coerce').fillna(1).astype(int)
+        df['Year'] = df['Year'].astype(int)
+        df['date'] = pd.to_datetime(dict(year=df['Year'], month=df['Month'], day=1))
+        df = df.sort_values('date').reset_index(drop=True)
         
-        # Split data
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        # Time-based split: 80% train, 20% test (chronological)
+        split_idx = int(len(df) * 0.8)
+        train_df = df.iloc[:split_idx]
+        test_df = df.iloc[split_idx:]
+        
+        # Prepare features and target
+        X_train = train_df[self.feature_columns]
+        y_train = train_df['Market_Demand']
+        X_test = test_df[self.feature_columns]
+        y_test = test_df['Market_Demand']
         
         # Create pipeline
         categorical_features = ['Region', 'Crop']
@@ -131,9 +149,15 @@ class DemandForecastingModel:
             ('cat', OneHotEncoder(handle_unknown='ignore'), categorical_features)
         ])
         
-        # Try different models
+        # Try different models (with regularization)
         models = {
-            'RandomForest': RandomForestRegressor(n_estimators=100, random_state=42),
+            'RandomForest': RandomForestRegressor(
+                n_estimators=100, 
+                random_state=42,
+                max_depth=20,
+                min_samples_split=5,
+                min_samples_leaf=2
+            ),
             'LinearRegression': LinearRegression()
         }
         

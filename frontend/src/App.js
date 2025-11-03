@@ -10,7 +10,7 @@ const AnnDataApp = () => {
   const notifications = [];
   
   // API Configuration
-  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://ann-data-api.onrender.com/api';
+  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:3000/api';
   
   // Check if user is logged in on app load
   useEffect(() => {
@@ -811,28 +811,28 @@ const AnnDataApp = () => {
               {demandForecast && (
                 <div className="ml-results">
                   <h4>📊 Market Demand Forecast Results</h4>
-                  {demandForecast.predicted_demand ? (
-                    <div className="forecast-card">
-                      <p><strong>Predicted Demand:</strong> {demandForecast.predicted_demand}</p>
-                      <p><strong>Confidence:</strong> {Math.round((demandForecast.confidence || 0) * 100)}%</p>
-                      <p><strong>Market Trend:</strong> {demandForecast.trend || 'N/A'}</p>
-                      {demandForecast.recommendations && (
-                        <div className="forecast-recommendations">
-                          <h5>💡 Recommendations:</h5>
-                          <ul>
-                            {demandForecast.recommendations.map((rec, index) => (
-                              <li key={index}>{rec}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="debug-info">
-                      <p><strong>Debug:</strong> Response data structure:</p>
-                      <pre>{JSON.stringify(demandForecast, null, 2)}</pre>
-                    </div>
-                  )}
+                  <div className="forecast-card">
+                    <p><strong>Crop:</strong> {demandFormData.crop}</p>
+                    <p><strong>Region:</strong> {demandFormData.region}</p>
+                    <p><strong>Period:</strong> {new Date(0, demandFormData.month - 1).toLocaleString('default', { month: 'long' })} {demandFormData.year}</p>
+                    <p><strong>Predicted Demand:</strong> {demandForecast.predicted_demand || demandForecast.demand || 'N/A'} tonnes</p>
+                    {demandForecast.confidence && (
+                      <p><strong>Confidence:</strong> {Math.round(demandForecast.confidence * 100)}%</p>
+                    )}
+                    {demandForecast.trend && (
+                      <p><strong>Market Trend:</strong> {demandForecast.trend}</p>
+                    )}
+                    {demandForecast.recommendations && demandForecast.recommendations.length > 0 && (
+                      <div className="forecast-recommendations">
+                        <h5>💡 Recommendations:</h5>
+                        <ul>
+                          {demandForecast.recommendations.map((rec, index) => (
+                            <li key={index}>{rec}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
