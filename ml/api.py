@@ -11,7 +11,27 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from pipeline import CropRecommendationModel, DemandForecastingModel, CropRotationRecommender
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for frontend integration
+
+# CORS Configuration for Production
+CORS(app, resources={
+    r"/*": {
+        "origins": ["*"],  # Allow all origins for ML API
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization", "Accept", "User-Agent"],
+        "expose_headers": ["Content-Type"],
+        "supports_credentials": False,
+        "max_age": 600
+    }
+})
+
+# Add logging for incoming requests
+@app.before_request
+def log_request():
+    """Log incoming requests for debugging"""
+    print(f"📥 {request.method} {request.path} from {request.remote_addr}")
+    if request.method == 'POST':
+        print(f"   Content-Type: {request.content_type}")
+        print(f"   Headers: {dict(request.headers)}")
 
 # Global model instances
 crop_rec_model = None

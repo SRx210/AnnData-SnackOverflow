@@ -22,19 +22,57 @@ const JWT_SECRET = process.env.JWT_SECRET;
 // ML API Configuration
 const ML_API_BASE = process.env.ML_API_BASE || 'https://ann-data-ml.onrender.com';
 
+console.log(`🤖 ML API Base URL: ${ML_API_BASE}`);
+
 // Configure axios for ML API calls
 const mlApiClient = axios.create({
   baseURL: ML_API_BASE,
-  timeout: 30000, // 30 seconds timeout for ML operations
+  timeout: 60000, // 60 seconds timeout for ML operations (models can be slow)
   headers: {
     'Content-Type': 'application/json',
-    'User-Agent': 'AnnData-Backend/1.0'
+    'User-Agent': 'AnnData-Backend/1.0',
+    'Accept': 'application/json'
+  },
+  validateStatus: function (status) {
+    return status >= 200 && status < 500; // Don't throw on 4xx errors
   }
 });
 
-// Middleware
-app.use(cors());
+// CORS Configuration for Production
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl, or server-to-server)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      'http://localhost:3001',
+      'http://localhost:3000',
+      'https://ann-data-frontend.onrender.com',
+      'https://anndata-snackoverflow.onrender.com',
+      process.env.FRONTEND_URL
+    ].filter(Boolean);
+    
+    // Allow any onrender.com subdomain for flexibility
+    if (allowedOrigins.indexOf(origin) !== -1 || origin.includes('onrender.com')) {
+      callback(null, true);
+    } else {
+      // In production, log rejected origins for debugging
+      console.log(`⚠️ CORS: Rejecting origin: ${origin}`);
+      callback(null, true); // Still allow for now to avoid breaking changes
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  maxAge: 600 // Cache preflight for 10 minutes
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
+
+// Handle preflight requests
+app.options('*', cors(corsOptions));
 
 // Configure multer for file uploads
 const storage = multer.memoryStorage();
@@ -1234,13 +1272,21 @@ app.post('/api/ml/crop-recommendation', async (req, res) => {
       rainfall: parseFloat(rainfall)
     });
 
-    console.log('✅ ML API response received');
-    res.json(mlResponse.data);
+    console.log('✅ ML API response received:', mlResponse.status);
+    
+    // Check if the response was successful
+    if (mlResponse.status >= 200 && mlResponse.status < 300) {
+      res.json(mlResponse.data);
+    } else {
+      console.error('❌ ML API returned error status:', mlResponse.status);
+      res.status(mlResponse.status).json(mlResponse.data || { error: 'ML service error' });
+    }
   } catch (error) {
     console.error('❌ ML Crop Recommendation error:', error.message);
     console.error('Error details:', {
       status: error.response?.status,
       data: error.response?.data,
+      code: error.code,
       config: {
         url: error.config?.url,
         method: error.config?.method,
@@ -1252,11 +1298,18 @@ app.post('/api/ml/crop-recommendation', async (req, res) => {
       return res.status(error.response.status).json(error.response.data);
     }
     
+    if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+      return res.status(503).json({ 
+        error: 'ML service unavailable',
+        message: 'Cannot connect to ML service. Please ensure it is deployed and running.',
+        ml_api_base: ML_API_BASE
+      });
+    }
+    
     res.status(500).json({ 
-      error: 'ML service unavailable',
+      error: 'ML service error',
       message: error.message,
-      ml_api_base: ML_API_BASE,
-      fallback: 'Please try again later'
+      ml_api_base: ML_API_BASE
     });
   }
 });

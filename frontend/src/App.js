@@ -10,7 +10,9 @@ const AnnDataApp = () => {
   const notifications = [];
   
   // API Configuration
-  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://ann-data-ml.onrender.com';
+  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:3000/api';
+  
+  console.log('🌐 API Base URL:', API_BASE_URL);
   
   // Check if user is logged in on app load
   useEffect(() => {
@@ -558,14 +560,17 @@ const AnnDataApp = () => {
       setMessage('');
       
       try {
+        console.log('🌱 Calling crop recommendation API:', `${API_BASE_URL}/ml/crop-recommendation`);
         const response = await axios.post(`${API_BASE_URL}/ml/crop-recommendation`, cropFormData, {
           headers: {
             'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          timeout: 60000
         });
 
-        console.log('Crop recommendation response:', response.data);
+        console.log('✅ Crop recommendation response:', response.data);
         if (response.data && (response.data.success !== false)) {
           const data = response.data.data || response.data;
           setCropRecommendation(data);
@@ -574,7 +579,9 @@ const AnnDataApp = () => {
           setMessage(response.data.error || 'Failed to get crop recommendation');
         }
       } catch (error) {
-        setMessage(error.response?.data?.error || 'Network error. Please try again.');
+        console.error('❌ Crop recommendation error:', error);
+        const errorMsg = error.response?.data?.error || error.response?.data?.message || error.message || 'Network error. Please try again.';
+        setMessage(`❌ ${errorMsg}`);
       }
       
       setLoading(false);
@@ -585,14 +592,17 @@ const AnnDataApp = () => {
       setMessage('');
       
       try {
+        console.log('📈 Calling demand forecast API:', `${API_BASE_URL}/ml/demand-forecast`);
         const response = await axios.post(`${API_BASE_URL}/ml/demand-forecast`, demandFormData, {
           headers: {
             'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          timeout: 60000
         });
 
-        console.log('Demand forecast response:', response.data);
+        console.log('✅ Demand forecast response:', response.data);
         if (response.data && (response.data.success !== false)) {
           const data = response.data.data || response.data;
           setDemandForecast(data);
@@ -601,7 +611,9 @@ const AnnDataApp = () => {
           setMessage(response.data.error || 'Failed to get demand forecast');
         }
       } catch (error) {
-        setMessage(error.response?.data?.error || 'Network error. Please try again.');
+        console.error('❌ Demand forecast error:', error);
+        const errorMsg = error.response?.data?.error || error.response?.data?.message || error.message || 'Network error. Please try again.';
+        setMessage(`❌ ${errorMsg}`);
       }
       
       setLoading(false);
@@ -612,14 +624,17 @@ const AnnDataApp = () => {
       setMessage('');
       
       try {
+        console.log('🔄 Calling crop rotation API:', `${API_BASE_URL}/ml/crop-rotation`);
         const response = await axios.post(`${API_BASE_URL}/ml/crop-rotation`, rotationFormData, {
           headers: {
             'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          timeout: 60000
         });
 
-        console.log('Crop rotation response:', response.data);
+        console.log('✅ Crop rotation response:', response.data);
         if (response.data && (response.data.success !== false)) {
           const data = response.data.data || response.data;
           setRotationRecommendations(data);
@@ -628,7 +643,9 @@ const AnnDataApp = () => {
           setMessage(response.data.error || 'Failed to get crop rotation recommendations');
         }
       } catch (error) {
-        setMessage(error.response?.data?.error || 'Network error. Please try again.');
+        console.error('❌ Crop rotation error:', error);
+        const errorMsg = error.response?.data?.error || error.response?.data?.message || error.message || 'Network error. Please try again.';
+        setMessage(`❌ ${errorMsg}`);
       }
       
       setLoading(false);
