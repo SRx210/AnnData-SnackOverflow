@@ -10,7 +10,7 @@ const AnnDataApp = () => {
   const notifications = [];
   
   // API Configuration
-  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:3000/api';
+  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://ann-data-ml.onrender.com';
   
   // Check if user is logged in on app load
   useEffect(() => {

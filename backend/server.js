@@ -20,7 +20,7 @@ const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET;
 
 // ML API Configuration
-const ML_API_BASE = process.env.ML_API_BASE || 'http://127.0.0.1:5000';
+const ML_API_BASE = process.env.ML_API_BASE || 'https://ann-data-ml.onrender.com';
 
 // Configure axios for ML API calls
 const mlApiClient = axios.create({
