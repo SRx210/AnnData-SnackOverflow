@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, Cloud, Users, Leaf, User, MessageCircle, LogIn, LogOut, Search, MapPin, Phone, Mail, Star, Camera, TrendingUp, Droplets, Sun, AlertCircle, CheckCircle, Brain, BarChart3, Repeat, Activity } from 'lucide-react';
+import { Upload, Cloud, Users, Leaf, User, MessageCircle, LogIn, LogOut, Search, MapPin, Phone, Mail, Star, Camera, TrendingUp, Droplets, Sun, AlertCircle, CheckCircle, Brain, BarChart3, Repeat, Activity, PieChart as PieChartIcon, Download, RefreshCw } from 'lucide-react';
 import axios from 'axios';
+import { LineChart, Line, BarChart, Bar, PieChart, Pie, AreaChart, Area, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
+import DataVisualizationPage from './DataVisualization';
 import './App.css';
 
 const AnnDataApp = () => {
@@ -153,7 +155,7 @@ const AnnDataApp = () => {
               icon: <TrendingUp className="h-8 w-8" />,
               title: "Analytics Dashboard",
               description: "Track your farming activities, yields, and profits with detailed analytics and insights.",
-              page: "profile"
+              page: "visualization"
             },
             {
               icon: <MessageCircle className="h-8 w-8" />,
@@ -689,9 +691,12 @@ const AnnDataApp = () => {
                 <div className="form-grid">
                   <input
                     type="number"
-                    placeholder="Nitrogen (N) content"
+                    placeholder="Nitrogen (N) content (0-200)"
                     value={cropFormData.N}
                     onChange={(e) => setCropFormData({...cropFormData, N: e.target.value})}
+                    min="0"
+                    max="200"
+                    step="0.1"
                     required
                   />
                   <input
@@ -1774,6 +1779,8 @@ const AnnDataApp = () => {
         return user ? <FeedbackPage /> : <AuthPage />;
       case 'profile':
         return user ? <ProfilePage /> : <AuthPage />;
+      case 'visualization':
+        return user ? <DataVisualizationPage token={token} API_BASE_URL={API_BASE_URL} /> : <AuthPage />;
       default:
         return <HomePage />;
     }

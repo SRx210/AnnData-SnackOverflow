@@ -4,6 +4,7 @@ import os
 import sys
 import traceback
 from datetime import datetime
+import numpy as np
 
 # Add current directory to path for imports
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -105,15 +106,41 @@ def crop_recommendation():
             if field not in data:
                 return jsonify({'error': f'Missing required field: {field}'}), 400
         
+        # Validate and convert numeric fields with proper error handling
+        try:
+            N = float(data['N'])
+            P = float(data['P'])
+            K = float(data['K'])
+            temperature = float(data['temperature'])
+            humidity = float(data['humidity'])
+            ph = float(data['ph'])
+            rainfall = float(data['rainfall'])
+        except (ValueError, TypeError) as e:
+            return jsonify({'error': f'Invalid numeric value provided. All fields must be numbers.'}), 400
+        
+        # Validate ranges for realistic agricultural values
+        if not (0 <= N <= 200):
+            return jsonify({'error': 'Nitrogen (N) must be between 0 and 200'}), 400
+        if not (0 <= P <= 200):
+            return jsonify({'error': 'Phosphorous (P) must be between 0 and 200'}), 400
+        if not (0 <= K <= 200):
+            return jsonify({'error': 'Potassium (K) must be between 0 and 200'}), 400
+        if not (-10 <= temperature <= 60):
+            return jsonify({'error': 'Temperature must be between -10°C and 60°C'}), 400
+        if not (0 <= humidity <= 100):
+            return jsonify({'error': 'Humidity must be between 0% and 100%'}), 400
+        if not (0 <= ph <= 14):
+            return jsonify({'error': 'pH must be between 0 and 14'}), 400
+        if not (0 <= rainfall <= 500):
+            return jsonify({'error': 'Rainfall must be between 0 and 500 mm'}), 400
+        
         # Make prediction
         result = crop_rec_model.predict(
-            N=float(data['N']),
-            P=float(data['P']),
-            K=float(data['K']),
-            temperature=float(data['temperature']),
-            humidity=float(data['humidity']),
-            ph=float(data['ph']),
-            rainfall=float(data['rainfall'])
+            N=N, P=P, K=K,
+            temperature=temperature,
+            humidity=humidity,
+            ph=ph,
+            rainfall=rainfall
         )
         
         return jsonify({
@@ -150,12 +177,39 @@ def demand_forecast():
             if field not in data:
                 return jsonify({'error': f'Missing required field: {field}'}), 400
         
+        # Validate and convert fields
+        try:
+            year = int(data['year'])
+            month = int(data['month'])
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Year and month must be valid numbers'}), 400
+        
+        region = str(data['region']).strip()
+        crop = str(data['crop']).strip()
+        
+        # Validate empty strings
+        if not region or not crop:
+            return jsonify({'error': 'Region and crop cannot be empty'}), 400
+        
+        # Validate ranges
+        if not (2000 <= year <= 2100):
+            return jsonify({'error': 'Year must be between 2000 and 2100'}), 400
+        if not (1 <= month <= 12):
+            return jsonify({'error': 'Month must be between 1 and 12'}), 400
+        
+        # Validate that region and crop contain only letters, spaces, and hyphens (no random characters)
+        import re
+        if not re.match(r'^[A-Za-z\s\-]+$', region):
+            return jsonify({'error': 'Region must contain only letters, spaces, and hyphens'}), 400
+        if not re.match(r'^[A-Za-z\s\-]+$', crop):
+            return jsonify({'error': 'Crop must contain only letters, spaces, and hyphens'}), 400
+        
         # Make prediction
         result = demand_forecast_model.predict(
-            year=int(data['year']),
-            month=int(data['month']),
-            region=str(data['region']),
-            crop=str(data['crop'])
+            year=year,
+            month=month,
+            region=region,
+            crop=crop
         )
         
         return jsonify({
@@ -243,19 +297,50 @@ def crop_rotation():
             if field not in data:
                 return jsonify({'error': f'Missing required field: {field}'}), 400
         
-        top_k = data.get('top_k', 5)
+        # Validate and convert numeric fields
+        try:
+            temperature = float(data['temperature'])
+            humidity = float(data['humidity'])
+            moisture = float(data['moisture'])
+            nitrogen = float(data['nitrogen'])
+            phosphorous = float(data['phosphorous'])
+            potassium = float(data['potassium'])
+            top_k = int(data.get('top_k', 5))
+        except (ValueError, TypeError):
+            return jsonify({'error': 'All numeric fields must be valid numbers'}), 400
+        
+        current_crop = str(data['current_crop']).strip()
+        soil_type = str(data['soil_type']).strip()
+        
+        # Validate empty strings
+        if not current_crop or not soil_type:
+            return jsonify({'error': 'Current crop and soil type cannot be empty'}), 400
+        
+        # Validate ranges
+        if not (-10 <= temperature <= 60):
+            return jsonify({'error': 'Temperature must be between -10°C and 60°C'}), 400
+        if not (0 <= humidity <= 100):
+            return jsonify({'error': 'Humidity must be between 0% and 100%'}), 400
+        if not (0 <= moisture <= 100):
+            return jsonify({'error': 'Moisture must be between 0% and 100%'}), 400
+        if not (0 <= nitrogen <= 200):
+            return jsonify({'error': 'Nitrogen must be between 0 and 200'}), 400
+        if not (0 <= phosphorous <= 200):
+            return jsonify({'error': 'Phosphorous must be between 0 and 200'}), 400
+        if not (0 <= potassium <= 200):
+            return jsonify({'error': 'Potassium must be between 0 and 200'}), 400
         
         # Make recommendation
         result = crop_rotation_recommender.recommend_next_crop(
-            current_crop=str(data['current_crop']),
-            soil_type=str(data['soil_type']),
-            temp=float(data['temperature']),
-            humidity=float(data['humidity']),
-            moisture=float(data['moisture']),
-            n=float(data['nitrogen']),
-            p=float(data['phosphorous']),
-            k=float(data['potassium']),
-            top_k=int(top_k)
+            current_crop=current_crop,
+            soil_type=soil_type,
+            temp=temperature,
+            humidity=humidity,
+            moisture=moisture,
+            n=nitrogen,
+            p=phosphorous,
+            k=potassium,
+            top_k=top_k
         )
         
         return jsonify({
