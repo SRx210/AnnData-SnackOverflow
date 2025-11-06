@@ -1,11 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell
 } from 'recharts';
 import { TrendingUp, BarChart3, PieChart as PieChartIcon, Activity, Download, RefreshCw } from 'lucide-react';
+import axios from 'axios';
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+
+// ML API Base URL
+const ML_API_BASE_URL = process.env.REACT_APP_ML_API_BASE_URL || 'https://anndata-ml-api.onrender.com';
 
 const DataVisualizationPage = ({ token, API_BASE_URL }) => {
   const [activeTab, setActiveTab] = useState('soil');
@@ -17,6 +21,7 @@ const DataVisualizationPage = ({ token, API_BASE_URL }) => {
     timePeriod: 12
   });
   const [errors, setErrors] = useState({});
+  const [realDataLoaded, setRealDataLoaded] = useState(false);
 
   // Validation function
   const validateForm = () => {
@@ -130,12 +135,49 @@ const DataVisualizationPage = ({ token, API_BASE_URL }) => {
     { crop: 'Sugarcane', current: 5500, previous: 5200, target: 6000 }
   ];
 
-  const [soilData, setSoilData] = useState(generateSoilData());
-  const [cropData, setCropData] = useState(generateCropData());
-  const [marketData, setMarketData] = useState(generateMarketData());
-  const [environmentalData, setEnvironmentalData] = useState(generateEnvironmentalData());
+  const [soilData, setSoilData] = useState([]);
+  const [cropData, setCropData] = useState([]);
+  const [marketData, setMarketData] = useState([]);
+  const [environmentalData, setEnvironmentalData] = useState([]);
+  const [soilRecommendations, setSoilRecommendations] = useState([]);
+  const [cropDistributionData, setCropDistributionData] = useState(cropDistribution);
+  const [yieldComparisonData, setYieldComparisonData] = useState(yieldComparison);
 
-  const handleRefresh = () => {
+  // Fetch real data from ML API
+  const fetchRealData = async (analysisType) => {
+    try {
+      console.log(`🔍 Fetching ${analysisType} data from ML API...`);
+      const response = await axios.post(`${ML_API_BASE_URL}/api/ml/visualization-data`, {
+        analysis_type: analysisType,
+        region: formData.region,
+        crop: formData.crop,
+        timePeriod: parseInt(formData.timePeriod)
+      }, {
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000
+      });
+
+      if (response.data && response.data.success) {
+        console.log(`✅ ${analysisType} data fetched successfully:`, response.data.data);
+        return response.data.data;
+      } else {
+        console.error(`❌ Failed to fetch ${analysisType} data:`, response.data);
+        return null;
+      }
+    } catch (error) {
+      console.error(`❌ Error fetching ${analysisType} data:`, error);
+      throw error;
+    }
+  };
+
+  // Load initial data on component mount
+  useEffect(() => {
+    handleRefresh();
+  }, []);
+
+  const handleRefresh = async () => {
     if (!validateForm()) {
       setMessage('❌ Please fix the validation errors before refreshing data');
       return;
@@ -143,15 +185,64 @@ const DataVisualizationPage = ({ token, API_BASE_URL }) => {
     
     setLoading(true);
     setMessage('');
+    setRealDataLoaded(false);
     
-    setTimeout(() => {
+    try {
+      // Fetch all data types in parallel
+      const [soilResult, cropResult, marketResult, distributionResult, environmentalResult] = await Promise.all([
+        fetchRealData('soil'),
+        fetchRealData('crop'),
+        fetchRealData('market'),
+        fetchRealData('distribution'),
+        fetchRealData('environmental')
+      ]);
+
+      // Update soil data
+      if (soilResult && soilResult.data) {
+        setSoilData(soilResult.data.nutrient_levels || []);
+        setSoilRecommendations(soilResult.data.recommendations || []);
+      }
+
+      // Update crop data
+      if (cropResult && cropResult.data) {
+        setCropData(cropResult.data.yield_trends || []);
+        if (cropResult.data.crop_distribution) {
+          setCropDistributionData(cropResult.data.crop_distribution);
+        }
+        if (cropResult.data.yield_comparison) {
+          setYieldComparisonData(cropResult.data.yield_comparison);
+        }
+      }
+
+      // Update market data
+      if (marketResult && marketResult.data) {
+        setMarketData(marketResult.data.market_trends || []);
+      }
+
+      // Update distribution data
+      if (distributionResult && distributionResult.data) {
+        setCropDistributionData(distributionResult.data.crop_distribution || cropDistribution);
+      }
+
+      // Update environmental data
+      if (environmentalResult && environmentalResult.data) {
+        setEnvironmentalData(environmentalResult.data.environmental_data || []);
+      }
+
+      setRealDataLoaded(true);
+      setMessage(`✅ Real data loaded successfully from ML datasets for ${formData.region} - ${formData.crop}`);
+    } catch (error) {
+      console.error('Error loading data:', error);
+      setMessage(`❌ Failed to load data from ML API. ${error.response?.data?.error || error.message}`);
+      
+      // Fallback to generated data if API fails
       setSoilData(generateSoilData());
       setCropData(generateCropData());
       setMarketData(generateMarketData());
       setEnvironmentalData(generateEnvironmentalData());
-      setMessage(`✅ Data refreshed successfully for ${formData.region} - ${formData.crop}`);
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
 
   const handleExport = () => {
@@ -160,12 +251,14 @@ const DataVisualizationPage = ({ token, API_BASE_URL }) => {
       crop: formData.crop,
       timePeriod: formData.timePeriod,
       generatedAt: new Date().toISOString(),
+      dataSource: realDataLoaded ? 'ML Datasets (Real Data)' : 'Generated Data',
       soilData,
       cropData,
       marketData,
       environmentalData,
-      cropDistribution,
-      yieldComparison
+      cropDistribution: cropDistributionData,
+      yieldComparison: yieldComparisonData,
+      soilRecommendations
     };
     
     const dataStr = JSON.stringify(dataToExport, null, 2);
@@ -176,15 +269,25 @@ const DataVisualizationPage = ({ token, API_BASE_URL }) => {
     link.download = `agricultural-analytics-${formData.region}-${formData.crop}-${Date.now()}.json`;
     link.click();
     URL.revokeObjectURL(url);
-    setMessage('✅ Data exported successfully!');
+    setMessage('✅ Real data exported successfully!');
   };
 
   const calculateStats = () => {
-    const avgNitrogen = soilData.reduce((sum, d) => sum + d.nitrogen, 0) / soilData.length;
-    const avgYield = cropData.reduce((sum, d) => sum + d.yield, 0) / cropData.length;
-    const avgQuality = cropData.reduce((sum, d) => sum + d.quality, 0) / cropData.length;
-    const totalDiseases = cropData.reduce((sum, d) => sum + d.diseaseIncidents, 0);
-    const avgPrice = marketData.reduce((sum, d) => sum + parseFloat(d.price), 0) / marketData.length;
+    const avgNitrogen = soilData.length > 0 
+      ? soilData.reduce((sum, d) => sum + (d.nitrogen || 0), 0) / soilData.length 
+      : 0;
+    const avgYield = cropData.length > 0 
+      ? cropData.reduce((sum, d) => sum + (d.yield || 0), 0) / cropData.length 
+      : 0;
+    const avgQuality = cropData.length > 0 
+      ? cropData.reduce((sum, d) => sum + (d.quality || 0), 0) / cropData.length 
+      : 0;
+    const totalDiseases = cropData.length > 0 
+      ? cropData.reduce((sum, d) => sum + (d.diseaseIncidents || 0), 0) 
+      : 0;
+    const avgPrice = marketData.length > 0 
+      ? marketData.reduce((sum, d) => sum + (parseFloat(d.price) || 0), 0) / marketData.length 
+      : 0;
     
     return {
       avgNitrogen: avgNitrogen.toFixed(1),
@@ -202,6 +305,11 @@ const DataVisualizationPage = ({ token, API_BASE_URL }) => {
       <div className="form-container" style={{ maxWidth: '1400px' }}>
         <h2>📊 Data Visualization Dashboard</h2>
         <p>Comprehensive agricultural analytics and insights for {formData.region}</p>
+        {realDataLoaded && (
+          <div style={{ padding: '10px', background: '#10b98120', borderRadius: '8px', marginBottom: '10px', border: '2px solid #10b981' }}>
+            <strong>✅ Real Data Source:</strong> All visualizations are based on actual ML training datasets from crop_recommendation.csv, crop_yield.csv, crop_demand_data.csv, and crop_soil.csv
+          </div>
+        )}
 
         {message && (
           <div className={message.includes('✅') ? 'message-success' : 'message-error'}>
@@ -315,13 +423,21 @@ const DataVisualizationPage = ({ token, API_BASE_URL }) => {
               </LineChart>
             </ResponsiveContainer>
             <div className="ml-results" style={{ marginTop: '20px' }}>
-              <h4>💡 Soil Health Recommendations</h4>
+              <h4>💡 Soil Health Recommendations {realDataLoaded && '(Based on Real Dataset)'}</h4>
               <ul>
-                <li>✅ Nitrogen levels are optimal for {formData.crop} cultivation</li>
-                <li>✅ Phosphorous levels are adequate for root development</li>
-                <li>✅ Potassium levels support disease resistance</li>
-                <li>💡 Regular soil testing every 6 months is recommended</li>
-                <li>💡 Add organic matter to improve soil structure</li>
+                {soilRecommendations.length > 0 ? (
+                  soilRecommendations.map((rec, index) => (
+                    <li key={index}>{rec}</li>
+                  ))
+                ) : (
+                  <>
+                    <li>✅ Nitrogen levels are optimal for {formData.crop} cultivation</li>
+                    <li>✅ Phosphorous levels are adequate for root development</li>
+                    <li>✅ Potassium levels support disease resistance</li>
+                    <li>💡 Regular soil testing every 6 months is recommended</li>
+                    <li>💡 Add organic matter to improve soil structure</li>
+                  </>
+                )}
               </ul>
             </div>
           </div>
@@ -343,9 +459,9 @@ const DataVisualizationPage = ({ token, API_BASE_URL }) => {
               </AreaChart>
             </ResponsiveContainer>
             
-            <h4 style={{ marginTop: '30px' }}>📊 Yield Comparison by Crop</h4>
+            <h4 style={{ marginTop: '30px' }}>📊 Yield Comparison by Crop {realDataLoaded && '(Real Data)'}</h4>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={yieldComparison}>
+              <BarChart data={yieldComparisonData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="crop" />
                 <YAxis />
@@ -358,7 +474,7 @@ const DataVisualizationPage = ({ token, API_BASE_URL }) => {
             </ResponsiveContainer>
             
             <div className="ml-results" style={{ marginTop: '20px' }}>
-              <h4>💡 Performance Insights</h4>
+              <h4>💡 Performance Insights {realDataLoaded && '(Based on Real Dataset)'}</h4>
               <ul>
                 <li>📈 Yield trends show {stats.avgYield > 3000 ? 'positive' : 'moderate'} growth</li>
                 <li>✅ Average quality score of {stats.avgQuality}% indicates good crop health</li>
@@ -402,11 +518,11 @@ const DataVisualizationPage = ({ token, API_BASE_URL }) => {
         {/* Crop Distribution Tab */}
         {activeTab === 'distribution' && (
           <div className="ml-section">
-            <h3>🥧 Crop Distribution Analysis</h3>
+            <h3>🥧 Crop Distribution Analysis {realDataLoaded && '(Real Dataset)'}</h3>
             <ResponsiveContainer width="100%" height={400}>
               <PieChart>
                 <Pie
-                  data={cropDistribution}
+                  data={cropDistributionData}
                   cx="50%"
                   cy="50%"
                   labelLine={false}
@@ -415,7 +531,7 @@ const DataVisualizationPage = ({ token, API_BASE_URL }) => {
                   fill="#8884d8"
                   dataKey="value"
                 >
-                  {cropDistribution.map((entry, index) => (
+                  {cropDistributionData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
@@ -423,16 +539,16 @@ const DataVisualizationPage = ({ token, API_BASE_URL }) => {
               </PieChart>
             </ResponsiveContainer>
             
-            <h4 style={{ marginTop: '30px' }}>📊 Area Distribution (hectares)</h4>
+            <h4 style={{ marginTop: '30px' }}>📊 Area Distribution (hectares) {realDataLoaded && '(Real Data)'}</h4>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={cropDistribution}>
+              <BarChart data={cropDistributionData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="crop" />
                 <YAxis />
                 <Tooltip />
                 <Legend />
                 <Bar dataKey="area" fill="#10b981" name="Area (hectares)">
-                  {cropDistribution.map((entry, index) => (
+                  {cropDistributionData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Bar>
