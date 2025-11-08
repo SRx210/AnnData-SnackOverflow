@@ -84,6 +84,10 @@ class CropRecommendationModel:
         """Predict crop recommendation"""
         if self.model is None:
             raise ValueError("Model not loaded. Call load_model() first.")
+        
+        # Log user input for verification
+        print(f"\n🌱 CROP RECOMMENDATION - User Input:")
+        print(f"   N={N}, P={P}, K={K}, Temp={temperature}°C, Humidity={humidity}%, pH={ph}, Rainfall={rainfall}mm")
             
         features = pd.DataFrame({
             'N': [N], 'P': [P], 'K': [K], 
@@ -93,6 +97,7 @@ class CropRecommendationModel:
         
         prediction = self.model.predict(features)[0]
         probabilities = self.model.predict_proba(features)[0]
+        print(f"   ✅ Model prediction: {prediction} (using actual user input)")
         
         # Get top 3 recommendations
         classes = self.model.classes_
@@ -197,6 +202,10 @@ class DemandForecastingModel:
         """Predict market demand"""
         if self.model is None:
             raise ValueError("Model not loaded. Call load_model() first.")
+        
+        # Log user input for verification
+        print(f"\n📈 DEMAND FORECAST - User Input:")
+        print(f"   Year={year}, Month={month}, Region={region}, Crop={crop}")
             
         features = pd.DataFrame({
             'Year': [year], 'Month': [month], 
@@ -204,6 +213,7 @@ class DemandForecastingModel:
         })
         
         prediction = self.model.predict(features)[0]
+        print(f"   ✅ Model prediction: {prediction:.2f} tonnes (using actual user input)")
         
         return {
             'predicted_demand': float(prediction),
@@ -293,9 +303,15 @@ class CropRotationRecommender:
         """Recommend next crop for rotation"""
         if self.soil_data is None:
             raise ValueError("Data not loaded. Call load_data() first.")
+        
+        # Log user input for verification
+        print(f"\n🔄 CROP ROTATION - User Input:")
+        print(f"   Current Crop={current_crop}, Soil={soil_type}, Temp={temp}°C, Humidity={humidity}%, Moisture={moisture}%")
+        print(f"   Nutrients: N={n}, P={p}, K={k}")
             
         current_crop = str(current_crop).strip().title()
         soil_type = str(soil_type).strip().title()
+        print(f"   ✅ Processing with normalized values: Crop={current_crop}, Soil={soil_type}")
         
         candidates = self.suit_by_soil.get(soil_type, [])
         scored = []
@@ -330,11 +346,19 @@ class CropRotationRecommender:
         # Sort by score and return top recommendations
         recommendations = sorted(scored, key=lambda x: x[1], reverse=True)[:top_k]
         
+        # Normalize scores to percentage (0-100)
+        if recommendations:
+            max_score = max(score for _, score in recommendations)
+            min_score = min(score for _, score in recommendations)
+            score_range = max_score - min_score if max_score != min_score else 1.0
+        
         return [
             {
                 'crop': crop,
                 'score': float(score),
-                'reason': self._get_recommendation_reason(crop, current_crop, cur_bias, self.bias_by_crop.get(crop))
+                'suitability_score': round(((score - min_score) / score_range) * 100) if recommendations else 0,
+                'reason': self._get_recommendation_reason(crop, current_crop, cur_bias, self.bias_by_crop.get(crop)),
+                'benefits': self._get_recommendation_reason(crop, current_crop, cur_bias, self.bias_by_crop.get(crop))
             }
             for crop, score in recommendations
         ]
