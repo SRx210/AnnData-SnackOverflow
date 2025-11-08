@@ -86,8 +86,8 @@ class CropRecommendationModel:
             raise ValueError("Model not loaded. Call load_model() first.")
         
         # Log user input for verification
-        print(f"\n🌱 CROP RECOMMENDATION - User Input:")
-        print(f"   N={N}, P={P}, K={K}, Temp={temperature}°C, Humidity={humidity}%, pH={ph}, Rainfall={rainfall}mm")
+        print(f"\n[CROP RECOMMENDATION] User Input:")
+        print(f"   N={N}, P={P}, K={K}, Temp={temperature}C, Humidity={humidity}%, pH={ph}, Rainfall={rainfall}mm")
             
         features = pd.DataFrame({
             'N': [N], 'P': [P], 'K': [K], 
@@ -97,7 +97,8 @@ class CropRecommendationModel:
         
         prediction = self.model.predict(features)[0]
         probabilities = self.model.predict_proba(features)[0]
-        print(f"   ✅ Model prediction: {prediction} (using actual user input)")
+        # Model returns lowercase labels (e.g., 'cotton', 'rice')
+        print(f"   [OK] Model prediction: {prediction} (lowercase format from dataset)")
         
         # Get top 3 recommendations
         classes = self.model.classes_
@@ -111,8 +112,16 @@ class CropRecommendationModel:
             })
             
         return {
-            'primary_recommendation': prediction,
-            'all_recommendations': recommendations
+            'primary_recommendation': prediction.title(),  # Convert to Title Case for display
+            'primary_recommendation_raw': prediction,  # Keep original for reference
+            'all_recommendations': [
+                {
+                    'crop': rec['crop'].title(),  # Convert to Title Case for display
+                    'crop_raw': rec['crop'],  # Keep original
+                    'confidence': rec['confidence']
+                }
+                for rec in recommendations
+            ]
         }
 
 class DemandForecastingModel:
@@ -204,7 +213,7 @@ class DemandForecastingModel:
             raise ValueError("Model not loaded. Call load_model() first.")
         
         # Log user input for verification
-        print(f"\n📈 DEMAND FORECAST - User Input:")
+        print(f"\n[DEMAND FORECAST] User Input:")
         print(f"   Year={year}, Month={month}, Region={region}, Crop={crop}")
             
         features = pd.DataFrame({
@@ -213,7 +222,7 @@ class DemandForecastingModel:
         })
         
         prediction = self.model.predict(features)[0]
-        print(f"   ✅ Model prediction: {prediction:.2f} tonnes (using actual user input)")
+        print(f"   [OK] Model prediction: {prediction:.2f} tonnes (using actual user input)")
         
         return {
             'predicted_demand': float(prediction),
@@ -305,15 +314,16 @@ class CropRotationRecommender:
             raise ValueError("Data not loaded. Call load_data() first.")
         
         # Log user input for verification
-        print(f"\n🔄 CROP ROTATION - User Input:")
-        print(f"   Current Crop={current_crop}, Soil={soil_type}, Temp={temp}°C, Humidity={humidity}%, Moisture={moisture}%")
+        print(f"\n[CROP ROTATION] User Input:")
+        print(f"   Current Crop={current_crop}, Soil={soil_type}, Temp={temp}C, Humidity={humidity}%, Moisture={moisture}%")
         print(f"   Nutrients: N={n}, P={p}, K={k}")
             
         current_crop = str(current_crop).strip().title()
         soil_type = str(soil_type).strip().title()
-        print(f"   ✅ Processing with normalized values: Crop={current_crop}, Soil={soil_type}")
+        print(f"   [OK] Processing with normalized values: Crop={current_crop}, Soil={soil_type}")
         
         candidates = self.suit_by_soil.get(soil_type, [])
+        print(f"   [INFO] Found {len(candidates)} candidate crops for {soil_type} soil")
         scored = []
         cur_bias = self.bias_by_crop.get(current_crop)
         
@@ -345,23 +355,48 @@ class CropRotationRecommender:
             
         # Sort by score and return top recommendations
         recommendations = sorted(scored, key=lambda x: x[1], reverse=True)[:top_k]
+        print(f"   [INFO] Top {len(recommendations)} recommendations with scores: {[(c, round(s, 2)) for c, s in recommendations]}")
         
         # Normalize scores to percentage (0-100)
-        if recommendations:
-            max_score = max(score for _, score in recommendations)
-            min_score = min(score for _, score in recommendations)
-            score_range = max_score - min_score if max_score != min_score else 1.0
+        if not recommendations or len(recommendations) == 0:
+            return []
         
-        return [
-            {
+        max_score = max(score for _, score in recommendations)
+        min_score = min(score for _, score in recommendations)
+        score_range = max_score - min_score
+        
+        # If all scores are the same or very close, distribute evenly
+        if score_range < 0.01:
+            result = []
+            for idx, (crop, score) in enumerate(recommendations):
+                suitability = 100 - (idx * 10)  # 100%, 90%, 80%, 70%, 60%
+                result.append({
+                    'crop': crop,
+                    'score': float(score),
+                    'suitability_score': max(suitability, 50),  # Minimum 50%
+                    'reason': self._get_recommendation_reason(crop, current_crop, cur_bias, self.bias_by_crop.get(crop)),
+                    'benefits': self._get_recommendation_reason(crop, current_crop, cur_bias, self.bias_by_crop.get(crop))
+                })
+            print(f"   [INFO] All scores similar - distributed evenly: {[r['suitability_score'] for r in result]}")
+            return result
+        
+        # Normal case: scores differ - normalize to 0-100
+        # But ensure minimum 50% for any recommendation
+        result = []
+        for crop, score in recommendations:
+            normalized = ((score - min_score) / score_range) * 100
+            # Ensure at least 50% for any recommended crop
+            suitability = max(round(normalized), 50)
+            result.append({
                 'crop': crop,
                 'score': float(score),
-                'suitability_score': round(((score - min_score) / score_range) * 100) if recommendations else 0,
+                'suitability_score': suitability,
                 'reason': self._get_recommendation_reason(crop, current_crop, cur_bias, self.bias_by_crop.get(crop)),
                 'benefits': self._get_recommendation_reason(crop, current_crop, cur_bias, self.bias_by_crop.get(crop))
-            }
-            for crop, score in recommendations
-        ]
+            })
+        
+        print(f"   [INFO] Normalized suitability scores: {[r['suitability_score'] for r in result]}")
+        return result
     
     def _get_recommendation_reason(self, recommended_crop, current_crop, current_bias, recommended_bias):
         """Generate explanation for recommendation"""
